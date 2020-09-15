@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_literal(t *testing.T) {
-	parseJoe := literal("Hello Joe!")
+func Test_Literal(t *testing.T) {
+	parseJoe := Literal("Hello Joe!")
 	{
 		remaining, matched, err := parseJoe("Hello Joe!")
 		assert.Empty(t, remaining)
@@ -26,27 +26,27 @@ func Test_literal(t *testing.T) {
 	}
 }
 
-func Test_identifier(t *testing.T) {
+func Test_Identifier(t *testing.T) {
 	{
-		remaining, matched, err := identifier("i_am_an_identifier")
+		remaining, matched, err := Identifier("i_am_an_identifier")
 		assert.Empty(t, remaining)
 		assert.Equal(t, "i_am_an_identifier", matched)
 		assert.NoError(t, err)
 	}
 	{
-		remaining, matched, err := identifier("not entirely an identifier")
+		remaining, matched, err := Identifier("not entirely an identifier")
 		assert.Equal(t, " entirely an identifier", remaining)
 		assert.Equal(t, "not", matched)
 		assert.NoError(t, err)
 	}
 	{
-		_, _, err := identifier("!not at all an identifier")
+		_, _, err := Identifier("!not at all an identifier")
 		assert.EqualError(t, err, "!not at all an identifier")
 	}
 }
 
-func Test_pair(t *testing.T) {
-	tagOpener := pair(literal("<"), identifier)
+func Test_Pair(t *testing.T) {
+	tagOpener := Pair(Literal("<"), Identifier)
 	{
 		remaining, matched, err := tagOpener("<element/>")
 		assert.Equal(t, "/>", remaining)
@@ -65,8 +65,8 @@ func Test_pair(t *testing.T) {
 	}
 }
 
-func Test_right(t *testing.T) {
-	tagOpener := right(literal("<"), identifier)
+func Test_Right(t *testing.T) {
+	tagOpener := Right(Literal("<"), Identifier)
 	{
 		remaining, matched, err := tagOpener("<element/>")
 		assert.Equal(t, "/>", remaining)
@@ -75,8 +75,8 @@ func Test_right(t *testing.T) {
 	}
 }
 
-func Test_oneOrMore(t *testing.T) {
-	p := oneOrMore(literal("ha"))
+func Test_OneOrMore(t *testing.T) {
+	p := OneOrMore(Literal("ha"))
 	{
 		remaining, matched, err := p("hahaha")
 		assert.Empty(t, remaining)
@@ -93,8 +93,8 @@ func Test_oneOrMore(t *testing.T) {
 	}
 }
 
-func Test_zeroOrMore(t *testing.T) {
-	p := zeroOrMore(literal("ha"))
+func Test_ZeroOrMore(t *testing.T) {
+	p := ZeroOrMore(Literal("ha"))
 	{
 		remaining, matched, err := p("hahaha")
 		assert.Empty(t, remaining)
@@ -115,8 +115,8 @@ func Test_zeroOrMore(t *testing.T) {
 	}
 }
 
-func Test_pred(t *testing.T) {
-	p := pred(anyChar, func(matched interface{}) bool {
+func Test_Pred(t *testing.T) {
+	p := Pred(AnyChar, func(matched interface{}) bool {
 		return matched == 'o'
 	})
 	{
@@ -132,16 +132,16 @@ func Test_pred(t *testing.T) {
 	}
 }
 
-func Test_quotedString(t *testing.T) {
-	p := quotedString()
+func Test_QuotedString(t *testing.T) {
+	p := QuotedString()
 	remaining, matched, err := p(`"Hello Joe!"`)
 	assert.Equal(t, "", remaining)
 	assert.Equal(t, "Hello Joe!", matched)
 	assert.NoError(t, err)
 }
 
-func Test_choice(t *testing.T) {
-	p := choice(literal("package"), literal("func"))
+func Test_Choice(t *testing.T) {
+	p := Choice(Literal("package"), Literal("func"))
 	{
 		remaining, matched, err := p("package main")
 		assert.Equal(t, " main", remaining)
@@ -161,8 +161,8 @@ func Test_choice(t *testing.T) {
 	}
 }
 
-func Test_sexp(t *testing.T) {
-	p := sexp()
+func Test_SExpr(t *testing.T) {
+	p := SExpr()
 	{
 		remaining, matched, err := p(`()`)
 		assert.Equal(t, "", remaining)
@@ -193,7 +193,6 @@ func Test_sexp(t *testing.T) {
 		assert.EqualError(t, err, "wanted a literal \"(\", got: \"println \\\"Hello, World\\\"\"")
 	}
 	t.Run("recursion", func(t *testing.T) {
-		t.Skip()
 		remaining, matched, err := p(`(func main ())`)
 		assert.Equal(t, "", remaining)
 		assert.Equal(t, []interface{}{"func", "main", []interface{}{}}, matched)

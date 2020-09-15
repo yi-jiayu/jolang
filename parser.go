@@ -12,7 +12,7 @@ import (
 
 type Parser func(input string) (remaining string, matched interface{}, err error)
 
-func literal(s string) func(input string) (remaining string, matched interface{}, err error) {
+func Literal(s string) func(input string) (remaining string, matched interface{}, err error) {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		if strings.HasPrefix(remaining, s) {
@@ -25,7 +25,7 @@ func literal(s string) func(input string) (remaining string, matched interface{}
 	}
 }
 
-func identifier(input string) (remaining string, matched interface{}, err error) {
+func Identifier(input string) (remaining string, matched interface{}, err error) {
 	remaining = input
 	var match strings.Builder
 	for i, r := range remaining {
@@ -48,7 +48,7 @@ type MatchedPair struct {
 	Right interface{}
 }
 
-func pair(p1, p2 Parser) Parser {
+func Pair(p1, p2 Parser) Parser {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		r, left, err := p1(remaining)
@@ -65,8 +65,8 @@ func pair(p1, p2 Parser) Parser {
 	}
 }
 
-func left(p1, p2 Parser) Parser {
-	p := pair(p1, p2)
+func Left(p1, p2 Parser) Parser {
+	p := Pair(p1, p2)
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		remaining, pair, err := p(remaining)
@@ -78,8 +78,8 @@ func left(p1, p2 Parser) Parser {
 	}
 }
 
-func right(p1, p2 Parser) Parser {
-	p := pair(p1, p2)
+func Right(p1, p2 Parser) Parser {
+	p := Pair(p1, p2)
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		remaining, pair, err := p(remaining)
@@ -91,7 +91,7 @@ func right(p1, p2 Parser) Parser {
 	}
 }
 
-func oneOrMore(p Parser) Parser {
+func OneOrMore(p Parser) Parser {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		remaining, match, err := p(remaining)
@@ -114,7 +114,7 @@ func oneOrMore(p Parser) Parser {
 	}
 }
 
-func zeroOrMore(p Parser) Parser {
+func ZeroOrMore(p Parser) Parser {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		matches := make([]interface{}, 0)
@@ -135,7 +135,7 @@ func zeroOrMore(p Parser) Parser {
 	}
 }
 
-func anyChar(input string) (remaining string, matched interface{}, err error) {
+func AnyChar(input string) (remaining string, matched interface{}, err error) {
 	remaining = input
 	r, size := utf8.DecodeRuneInString(remaining)
 	if r == utf8.RuneError {
@@ -147,7 +147,7 @@ func anyChar(input string) (remaining string, matched interface{}, err error) {
 	return
 }
 
-func pred(p Parser, f func(matched interface{}) bool) Parser {
+func Pred(p Parser, f func(matched interface{}) bool) Parser {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		r, m, err := p(remaining)
@@ -164,21 +164,21 @@ func pred(p Parser, f func(matched interface{}) bool) Parser {
 	}
 }
 
-func whitespaceChar() Parser {
-	return pred(anyChar, func(matched interface{}) bool {
+func WhitespaceChar() Parser {
+	return Pred(AnyChar, func(matched interface{}) bool {
 		return unicode.IsSpace(matched.(rune))
 	})
 }
 
-func space1() Parser {
-	return oneOrMore(whitespaceChar())
+func OneOrMoreWhitespaceChars() Parser {
+	return OneOrMore(WhitespaceChar())
 }
 
-func space0() Parser {
-	return zeroOrMore(whitespaceChar())
+func ZeroOrMoreWhitespaceChars() Parser {
+	return ZeroOrMore(WhitespaceChar())
 }
 
-func mapResult(p Parser, f func(matched interface{}) interface{}) Parser {
+func Map(p Parser, f func(matched interface{}) interface{}) Parser {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		remaining, matched, err = p(remaining)
@@ -190,14 +190,14 @@ func mapResult(p Parser, f func(matched interface{}) interface{}) Parser {
 	}
 }
 
-func quotedString() Parser {
-	return mapResult(right(
-		literal(`"`),
-		left(
-			zeroOrMore(pred(anyChar, func(matched interface{}) bool {
+func QuotedString() Parser {
+	return Map(Right(
+		Literal(`"`),
+		Left(
+			ZeroOrMore(Pred(AnyChar, func(matched interface{}) bool {
 				return matched.(rune) != '"'
 			})),
-			literal(`"`))),
+			Literal(`"`))),
 		func(matched interface{}) interface{} {
 			var s strings.Builder
 			for _, r := range matched.([]interface{}) {
@@ -208,7 +208,7 @@ func quotedString() Parser {
 	)
 }
 
-func choice(ps ...Parser) Parser {
+func Choice(ps ...Parser) Parser {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		var r string
@@ -225,17 +225,27 @@ func choice(ps ...Parser) Parser {
 	}
 }
 
-func whitespaceWrap(p Parser) Parser {
-	return right(space0(), left(p, space0()))
+func WhitespaceWrap(p Parser) Parser {
+	return Right(ZeroOrMoreWhitespaceChars(), Left(p, ZeroOrMoreWhitespaceChars()))
 }
 
-func sexp() Parser {
-	return right(literal("("),
-		left(
-			zeroOrMore(
-				whitespaceWrap(choice(identifier, quotedString())),
+type SexpParser struct{}
+
+func (p SexpParser) Parse(input string) (remaining string, matched interface{}, err error) {
+	return Right(Literal("("),
+		Left(
+			ZeroOrMore(
+				WhitespaceWrap(Choice(Identifier, QuotedString(), p.Parse)),
 			),
-			literal(")"),
+			Literal(")"),
 		),
-	)
+	)(input)
+}
+
+func SExpr() Parser {
+	return SexpParser{}.Parse
+}
+
+func SExprs() Parser {
+	return ZeroOrMore(WhitespaceWrap(SExpr()))
 }
