@@ -1,6 +1,8 @@
 package jo
 
 import (
+	"go/ast"
+	"go/token"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -167,6 +169,19 @@ func Test_Choice(t *testing.T) {
 	}
 }
 
+func ident(v string) *ast.Ident {
+	return &ast.Ident{
+		Name: v,
+	}
+}
+
+func strLit(v string) *ast.BasicLit {
+	return &ast.BasicLit{
+		Kind:  token.STRING,
+		Value: v,
+	}
+}
+
 func Test_SExpr(t *testing.T) {
 	p := SExpr()
 	{
@@ -178,19 +193,19 @@ func Test_SExpr(t *testing.T) {
 	{
 		remaining, matched, err := p(`(import main)`)
 		assert.Equal(t, "", remaining)
-		assert.Equal(t, []interface{}{"import", "main"}, matched)
+		assert.Equal(t, []interface{}{token.IMPORT, ident("main")}, matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := p(`(println "Hello, World")`)
 		assert.Equal(t, "", remaining)
-		assert.Equal(t, []interface{}{"println", "Hello, World"}, matched)
+		assert.Equal(t, []interface{}{ident("println"), strLit("\"Hello, World\"")}, matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := p(`(	println  "Hello, World" )`)
 		assert.Equal(t, "", remaining)
-		assert.Equal(t, []interface{}{"println", "Hello, World"}, matched)
+		assert.Equal(t, []interface{}{ident("println"), strLit("\"Hello, World\"")}, matched)
 		assert.NoError(t, err)
 	}
 	{
@@ -201,7 +216,7 @@ func Test_SExpr(t *testing.T) {
 	t.Run("recursion", func(t *testing.T) {
 		remaining, matched, err := p(`(func main ())`)
 		assert.Equal(t, "", remaining)
-		assert.Equal(t, []interface{}{"func", "main", []interface{}{}}, matched)
+		assert.Equal(t, []interface{}{token.FUNC, ident("main"), []interface{}{}}, matched)
 		assert.NoError(t, err)
 	})
 }
@@ -212,4 +227,119 @@ func TestPackageClause(t *testing.T) {
 	assert.Equal(t, "", remaining)
 	assert.Equal(t, "main", matched)
 	assert.NoError(t, err)
+}
+
+func Test_decimalLit(t *testing.T) {
+	p := decimalLit()
+	{
+		remaining, matched, err := p("0 aoeu")
+		assert.Equal(t, " aoeu", remaining)
+		assert.Equal(t, &ast.BasicLit{Kind: token.INT, Value: "0"}, matched)
+		assert.NoError(t, err)
+	}
+	{
+		remaining, matched, err := p("12340 aoeu")
+		assert.Equal(t, " aoeu", remaining)
+		assert.Equal(t, &ast.BasicLit{Kind: token.INT, Value: "12340"}, matched)
+		assert.NoError(t, err)
+	}
+}
+
+func Test_stringLit(t *testing.T) {
+	p := stringLit()
+	remaining, matched, err := p(`"Hello, World"`)
+	assert.Equal(t, "", remaining)
+	assert.Equal(t, &ast.BasicLit{Kind: token.STRING, Value: "\"Hello, World\""}, matched)
+	assert.NoError(t, err)
+}
+
+func TestSourceFile(t *testing.T) {
+	p := SourceFile()
+	const input = `(package main)
+
+(func main () (println "Hello, World"))`
+	_, matched, err := p(input)
+	assert.Equal(t, &ast.File{
+		Name: &ast.Ident{
+			Name: "main",
+		},
+		Decls: []ast.Decl{
+			&ast.FuncDecl{
+				Name: &ast.Ident{
+					Name: "main",
+				},
+				Type: &ast.FuncType{
+					Params: &ast.FieldList{},
+				},
+				Body: &ast.BlockStmt{
+					List: []ast.Stmt{
+						&ast.ExprStmt{
+							X: &ast.CallExpr{
+								Fun: &ast.Ident{
+									Name: "println",
+								},
+								Args: []ast.Expr{
+									&ast.BasicLit{
+										Kind:  token.STRING,
+										Value: "\"Hello, World\"",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}, matched)
+	assert.NoError(t, err)
+}
+
+func TestSExpr2(t *testing.T) {
+	p := SExpr2(OneOrMore(WhitespaceWrap(Identifier)))
+	remaining, matched, err := p("(hello world)")
+	assert.Equal(t, "", remaining)
+	assert.Equal(t, []interface{}{"hello", "world"}, matched)
+	assert.NoError(t, err)
+}
+
+func TestCallExpr(t *testing.T) {
+	p := CallExpr()
+	_, matched, err := p(`(println "Hello, World")`)
+	assert.Equal(t, &ast.CallExpr{
+		Fun:  ident("println"),
+		Args: []ast.Expr{strLit(`"Hello, World"`)},
+	}, matched)
+	assert.NoError(t, err)
+}
+
+func TestFunctionDecl(t *testing.T) {
+	p := FunctionDecl()
+	_, matched, err := p(`(func main () (println "Hello, World"))`)
+	assert.Equal(t, &ast.FuncDecl{
+		Name: &ast.Ident{
+			Name: "main",
+		},
+		Type: &ast.FuncType{
+			Params: &ast.FieldList{},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ExprStmt{
+					X: &ast.CallExpr{
+						Fun: &ast.Ident{
+							Name: "println",
+						},
+						Args: []ast.Expr{
+							&ast.BasicLit{
+								Kind:  token.STRING,
+								Value: "\"Hello, World\"",
+							},
+						},
+					},
+				},
+			},
+		},
+	}, matched)
+	assert.NoError(t, err)
+
 }

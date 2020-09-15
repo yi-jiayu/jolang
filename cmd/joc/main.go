@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+	"go/printer"
+	"go/token"
 	"io/ioutil"
 	"os"
 
@@ -13,9 +14,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	output, err := jo.Compile(string(all))
+	ast, err := jo.Parse(string(all))
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(output)
+	printer.Fprint(os.Stdout, token.NewFileSet(), ast)
 }

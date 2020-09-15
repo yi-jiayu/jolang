@@ -3,6 +3,8 @@ package jo
 import (
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/token"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -41,6 +43,19 @@ func Identifier(input string) (remaining string, matched interface{}, err error)
 	matched = match.String()
 	remaining = remaining[match.Len():]
 	return
+}
+
+func identifier() Parser {
+	return Map(Identifier, func(matched interface{}) interface{} {
+		ident := matched.(string)
+		tok := token.Lookup(ident)
+		if tok == token.IDENT {
+			return &ast.Ident{
+				Name: matched.(string),
+			}
+		}
+		return tok
+	})
 }
 
 type MatchedPair struct {
@@ -230,13 +245,13 @@ func WhitespaceWrap(p Parser) Parser {
 	return Right(ZeroOrMoreWhitespaceChars(), Left(p, ZeroOrMoreWhitespaceChars()))
 }
 
-type SexpParser struct{}
+type SExprParser struct{}
 
-func (p SexpParser) Parse(input string) (remaining string, matched interface{}, err error) {
+func (p SExprParser) Parse(input string) (remaining string, matched interface{}, err error) {
 	return Right(Literal("("),
 		Left(
 			ZeroOrMore(
-				WhitespaceWrap(Choice(Identifier, QuotedString(), p.Parse)),
+				WhitespaceWrap(Choice(identifier(), basicLit(), p.Parse)),
 			),
 			Literal(")"),
 		),
@@ -244,7 +259,7 @@ func (p SexpParser) Parse(input string) (remaining string, matched interface{}, 
 }
 
 func SExpr() Parser {
-	return SexpParser{}.Parse
+	return SExprParser{}.Parse
 }
 
 func SExprs() Parser {
@@ -253,4 +268,139 @@ func SExprs() Parser {
 
 func PackageClause() Parser {
 	return Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), Identifier))
+}
+
+func decimalLit() Parser {
+	decimalDigit := Pred(AnyChar, func(matched interface{}) bool {
+		return unicode.IsDigit(matched.(rune))
+	})
+	nonZeroDigit := Pred(decimalDigit, func(matched interface{}) bool {
+		return matched != '0'
+	})
+	nonZeroDecimalLit := Map(Pair(nonZeroDigit, ZeroOrMore(decimalDigit)), func(matched interface{}) interface{} {
+		pair := matched.(MatchedPair)
+		first := pair.Left.(rune)
+		rest := pair.Right.([]interface{})
+		var s strings.Builder
+		s.WriteRune(first)
+		for _, r := range rest {
+			s.WriteRune(r.(rune))
+		}
+		return s.String()
+	})
+	return Map(Choice(Literal("0"), nonZeroDecimalLit), func(matched interface{}) interface{} {
+		return &ast.BasicLit{
+			Kind:  token.INT,
+			Value: matched.(string),
+		}
+	})
+}
+
+func stringLit() Parser {
+	return Map(QuotedString(), func(matched interface{}) interface{} {
+		return &ast.BasicLit{
+			Kind:  token.STRING,
+			Value: `"` + matched.(string) + `"`,
+		}
+	})
+}
+
+func basicLit() Parser {
+	return Choice(decimalLit(), stringLit())
+}
+
+func Rune(r rune) Parser {
+	return func(input string) (remaining string, matched interface{}, err error) {
+		remaining = input
+		c, size := utf8.DecodeRuneInString(remaining)
+		if c == utf8.RuneError {
+			err = errors.New(remaining)
+			return
+		}
+		if r != c {
+			err = errors.New(fmt.Sprintf("wanted a literal %q, got %q", r, c))
+			return
+		}
+		remaining = input[size:]
+		matched = c
+		return
+	}
+}
+
+func Delimited(start, end rune, p Parser) Parser {
+	return Right(Rune(start),
+		Left(p,
+			Rune(end)),
+	)
+}
+
+func SExpr2(p Parser) Parser {
+	return Delimited('(', ')', WhitespaceWrap(p))
+}
+
+func ImportClause() Parser {
+	return SExpr2(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier())))
+}
+
+func CallExpr() Parser {
+	return Map(SExpr2(Pair(identifier(), Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(basicLit()))))),
+		func(matched interface{}) interface{} {
+			pair := matched.(MatchedPair)
+			fun := pair.Left.(*ast.Ident)
+			var args []ast.Expr
+			for _, basicLit := range pair.Right.([]interface{}) {
+				args = append(args, basicLit.(ast.Expr))
+			}
+			return &ast.CallExpr{
+				Fun:  fun,
+				Args: args,
+			}
+		})
+}
+
+func StatementList() Parser {
+	return ZeroOrMore(WhitespaceWrap(CallExpr()))
+}
+
+func Noop() Parser {
+	return func(input string) (remaining string, matched interface{}, err error) {
+		remaining = input
+		return
+	}
+}
+
+func FunctionDecl() Parser {
+	return Map(SExpr2(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(identifier(), Right(Right(OneOrMoreWhitespaceChars(), SExpr2(Noop())), WhitespaceWrap(StatementList())))))),
+		func(matched interface{}) interface{} {
+			pair := matched.(MatchedPair)
+			name := pair.Left.(*ast.Ident)
+			var body []ast.Stmt
+			for _, callExpr := range pair.Right.([]interface{}) {
+				body = append(body, &ast.ExprStmt{X: callExpr.(*ast.CallExpr)})
+			}
+			return &ast.FuncDecl{
+				Name: name,
+				Type: &ast.FuncType{Params: &ast.FieldList{}},
+				Body: &ast.BlockStmt{
+					List: body,
+				},
+			}
+		},
+	)
+}
+
+func SourceFile() Parser {
+	return Map(Pair(WhitespaceWrap(ImportClause()), WhitespaceWrap(OneOrMore(WhitespaceWrap(FunctionDecl())))),
+		func(matched interface{}) interface{} {
+			pair := matched.(MatchedPair)
+			pkgName := pair.Left.(*ast.Ident)
+			var decls []ast.Decl
+			for _, d := range pair.Right.([]interface{}) {
+				decls = append(decls, d.(ast.Decl))
+			}
+			return &ast.File{
+				Name:  pkgName,
+				Decls: decls,
+			}
+		})
 }
