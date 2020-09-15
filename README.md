@@ -1,5 +1,5 @@
 # jolang
-Transpiling S-expressions to Go code
+A Lisp dialect which compiles directly to Go source code
 
 ## About
 
