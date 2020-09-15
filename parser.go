@@ -51,14 +51,15 @@ type MatchedPair struct {
 func pair(p1, p2 Parser) Parser {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
-		remaining, left, err := p1(remaining)
+		r, left, err := p1(remaining)
 		if err != nil {
 			return
 		}
-		remaining, right, err := p2(remaining)
+		r, right, err := p2(r)
 		if err != nil {
 			return
 		}
+		remaining = r
 		matched = MatchedPair{Left: left, Right: right}
 		return
 	}
@@ -97,8 +98,7 @@ func oneOrMore(p Parser) Parser {
 		if err != nil {
 			return
 		}
-		var matches []interface{}
-		matches = append(matches, match)
+		matches := []interface{}{match}
 		for {
 			remaining, match, err = p(remaining)
 			if err != nil {
@@ -117,7 +117,7 @@ func oneOrMore(p Parser) Parser {
 func zeroOrMore(p Parser) Parser {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
-		var matches []interface{}
+		matches := make([]interface{}, 0)
 		for {
 			var match interface{}
 			var _err error
@@ -205,5 +205,37 @@ func quotedString() Parser {
 			}
 			return s.String()
 		},
+	)
+}
+
+func choice(ps ...Parser) Parser {
+	return func(input string) (remaining string, matched interface{}, err error) {
+		remaining = input
+		var r string
+		var m interface{}
+		for _, p := range ps {
+			r, m, err = p(remaining)
+			if err == nil {
+				remaining = r
+				matched = m
+				return
+			}
+		}
+		return
+	}
+}
+
+func whitespaceWrap(p Parser) Parser {
+	return right(space0(), left(p, space0()))
+}
+
+func sexp() Parser {
+	return right(literal("("),
+		left(
+			zeroOrMore(
+				whitespaceWrap(choice(identifier, quotedString())),
+			),
+			literal(")"),
+		),
 	)
 }

@@ -54,11 +54,13 @@ func Test_pair(t *testing.T) {
 		assert.NoError(t, err)
 	}
 	{
-		_, _, err := tagOpener("oops")
+		remaining, _, err := tagOpener("oops")
+		assert.Equal(t, "oops", remaining)
 		assert.EqualError(t, err, "wanted a literal \"<\", got: \"oops\"")
 	}
 	{
-		_, _, err := tagOpener("<!oops")
+		remaining, _, err := tagOpener("<!oops")
+		assert.Equal(t, "<!oops", remaining)
 		assert.EqualError(t, err, "!oops")
 	}
 }
@@ -136,4 +138,65 @@ func Test_quotedString(t *testing.T) {
 	assert.Equal(t, "", remaining)
 	assert.Equal(t, "Hello Joe!", matched)
 	assert.NoError(t, err)
+}
+
+func Test_choice(t *testing.T) {
+	p := choice(literal("package"), literal("func"))
+	{
+		remaining, matched, err := p("package main")
+		assert.Equal(t, " main", remaining)
+		assert.Equal(t, "package", matched)
+		assert.NoError(t, err)
+	}
+	{
+		remaining, matched, err := p("func main")
+		assert.Equal(t, " main", remaining)
+		assert.Equal(t, "func", matched)
+		assert.NoError(t, err)
+	}
+	{
+		remaining, _, err := p("import \"fmt\"")
+		assert.Equal(t, `import "fmt"`, remaining)
+		assert.Error(t, err)
+	}
+}
+
+func Test_sexp(t *testing.T) {
+	p := sexp()
+	{
+		remaining, matched, err := p(`()`)
+		assert.Equal(t, "", remaining)
+		assert.Equal(t, []interface{}{}, matched)
+		assert.NoError(t, err)
+	}
+	{
+		remaining, matched, err := p(`(import main)`)
+		assert.Equal(t, "", remaining)
+		assert.Equal(t, []interface{}{"import", "main"}, matched)
+		assert.NoError(t, err)
+	}
+	{
+		remaining, matched, err := p(`(println "Hello, World")`)
+		assert.Equal(t, "", remaining)
+		assert.Equal(t, []interface{}{"println", "Hello, World"}, matched)
+		assert.NoError(t, err)
+	}
+	{
+		remaining, matched, err := p(`(	println  "Hello, World" )`)
+		assert.Equal(t, "", remaining)
+		assert.Equal(t, []interface{}{"println", "Hello, World"}, matched)
+		assert.NoError(t, err)
+	}
+	{
+		remaining, _, err := p(`println "Hello, World"`)
+		assert.Equal(t, `println "Hello, World"`, remaining)
+		assert.EqualError(t, err, "wanted a literal \"(\", got: \"println \\\"Hello, World\\\"\"")
+	}
+	t.Run("recursion", func(t *testing.T) {
+		t.Skip()
+		remaining, matched, err := p(`(func main ())`)
+		assert.Equal(t, "", remaining)
+		assert.Equal(t, []interface{}{"func", "main", []interface{}{}}, matched)
+		assert.NoError(t, err)
+	})
 }
