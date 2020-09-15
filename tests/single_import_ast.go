@@ -25,6 +25,17 @@ func main() {
 					},
 				},
 			},
+			&ast.GenDecl{
+				Tok: token.IMPORT,
+				Specs: []ast.Spec{
+					&ast.ImportSpec{
+						Path: &ast.BasicLit{
+							Kind:  token.STRING,
+							Value: "\"log\"",
+						},
+					},
+				},
+			},
 			&ast.FuncDecl{
 				Name: &ast.Ident{
 					Name: "main",
@@ -47,7 +58,33 @@ func main() {
 								Args: []ast.Expr{
 									&ast.BasicLit{
 										Kind:  token.STRING,
-										Value: "\"Hello, World\\n\"",
+										Value: "\"string: %q, integer: %d\\n\"",
+									},
+									&ast.BasicLit{
+										Kind:  token.STRING,
+										Value: "\"hello\"",
+									},
+									&ast.BasicLit{
+										Kind:  token.INT,
+										Value: "1",
+									},
+								},
+							},
+						},
+						&ast.ExprStmt{
+							X: &ast.CallExpr{
+								Fun: &ast.SelectorExpr{
+									X: &ast.Ident{
+										Name: "log",
+									},
+									Sel: &ast.Ident{
+										Name: "Println",
+									},
+								},
+								Args: []ast.Expr{
+									&ast.BasicLit{
+										Kind:  token.STRING,
+										Value: "\"log\"",
 									},
 								},
 							},
@@ -61,6 +98,12 @@ func main() {
 				Path: &ast.BasicLit{
 					Kind:  token.STRING,
 					Value: "\"fmt\"",
+				},
+			},
+			&ast.ImportSpec{
+				Path: &ast.BasicLit{
+					Kind:  token.STRING,
+					Value: "\"log\"",
 				},
 			},
 		},

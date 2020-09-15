@@ -1,7 +1,9 @@
 package main
 
 import "fmt"
+import "log"
 
 func main() {
-	fmt.Printf("Hello, World\n")
+	fmt.Printf("string: %q, integer: %d\n", "hello", 1)
+	log.Println("log")
 }
