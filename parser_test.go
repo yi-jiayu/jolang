@@ -11,13 +11,13 @@ func Test_literal(t *testing.T) {
 	{
 		remaining, matched, err := parseJoe("Hello Joe!")
 		assert.Empty(t, remaining)
-		assert.Equal(t, "Hello Joe!", matched[0])
+		assert.Equal(t, "Hello Joe!", matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := parseJoe("Hello Joe! Hello Robert!")
 		assert.Equal(t, " Hello Robert!", remaining)
-		assert.Equal(t, "Hello Joe!", matched[0])
+		assert.Equal(t, "Hello Joe!", matched)
 		assert.NoError(t, err)
 	}
 	{
@@ -30,13 +30,13 @@ func Test_identifier(t *testing.T) {
 	{
 		remaining, matched, err := identifier("i_am_an_identifier")
 		assert.Empty(t, remaining)
-		assert.Equal(t, "i_am_an_identifier", matched[0])
+		assert.Equal(t, "i_am_an_identifier", matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := identifier("not entirely an identifier")
 		assert.Equal(t, " entirely an identifier", remaining)
-		assert.Equal(t, "not", matched[0])
+		assert.Equal(t, "not", matched)
 		assert.NoError(t, err)
 	}
 	{
@@ -50,7 +50,7 @@ func Test_pair(t *testing.T) {
 	{
 		remaining, matched, err := tagOpener("<element/>")
 		assert.Equal(t, "/>", remaining)
-		assert.Equal(t, []string{"<", "element"}, matched)
+		assert.Equal(t, MatchedPair{Left: "<", Right: "element"}, matched)
 		assert.NoError(t, err)
 	}
 	{
@@ -63,12 +63,12 @@ func Test_pair(t *testing.T) {
 	}
 }
 
-func Test_tail(t *testing.T) {
-	tagOpener := tail(literal("<"), identifier)
+func Test_right(t *testing.T) {
+	tagOpener := right(literal("<"), identifier)
 	{
 		remaining, matched, err := tagOpener("<element/>")
 		assert.Equal(t, "/>", remaining)
-		assert.Equal(t, []string{"element"}, matched)
+		assert.Equal(t, "element", matched)
 		assert.NoError(t, err)
 	}
 }
@@ -78,7 +78,7 @@ func Test_oneOrMore(t *testing.T) {
 	{
 		remaining, matched, err := p("hahaha")
 		assert.Empty(t, remaining)
-		assert.Equal(t, []string{"ha", "ha", "ha"}, matched)
+		assert.Equal(t, []interface{}{"ha", "ha", "ha"}, matched)
 		assert.NoError(t, err)
 	}
 	{
@@ -96,7 +96,7 @@ func Test_zeroOrMore(t *testing.T) {
 	{
 		remaining, matched, err := p("hahaha")
 		assert.Empty(t, remaining)
-		assert.Equal(t, []string{"ha", "ha", "ha"}, matched)
+		assert.Equal(t, []interface{}{"ha", "ha", "ha"}, matched)
 		assert.NoError(t, err)
 	}
 	{
@@ -114,13 +114,13 @@ func Test_zeroOrMore(t *testing.T) {
 }
 
 func Test_pred(t *testing.T) {
-	p := pred(anyChar, func(matched []string) bool {
-		return matched[0] == "o"
+	p := pred(anyChar, func(matched interface{}) bool {
+		return matched == 'o'
 	})
 	{
 		remaining, matched, err := p("omg")
 		assert.Equal(t, "mg", remaining)
-		assert.Equal(t, []string{"o"}, matched)
+		assert.Equal(t, 'o', matched)
 		assert.NoError(t, err)
 	}
 	{

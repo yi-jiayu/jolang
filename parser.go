@@ -9,14 +9,14 @@ import (
 
 // Symbol, string
 
-type Parser func(input string) (remaining string, matched []string, err error)
+type Parser func(input string) (remaining string, matched interface{}, err error)
 
-func literal(s string) func(input string) (remaining string, matched []string, err error) {
-	return func(input string) (remaining string, matched []string, err error) {
+func literal(s string) func(input string) (remaining string, matched interface{}, err error) {
+	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		if strings.HasPrefix(input, s) {
 			remaining = strings.TrimPrefix(input, s)
-			matched = []string{s}
+			matched = s
 			return
 		}
 		err = errors.New(input)
@@ -24,7 +24,7 @@ func literal(s string) func(input string) (remaining string, matched []string, e
 	}
 }
 
-func identifier(input string) (remaining string, matched []string, err error) {
+func identifier(input string) (remaining string, matched interface{}, err error) {
 	remaining = input
 	var match strings.Builder
 	for i, r := range remaining {
@@ -37,107 +37,116 @@ func identifier(input string) (remaining string, matched []string, err error) {
 		}
 		match.WriteRune(r)
 	}
-	matched = []string{match.String()}
+	matched = match.String()
 	remaining = remaining[match.Len():]
 	return
 }
 
+type MatchedPair struct {
+	Left  interface{}
+	Right interface{}
+}
+
 func pair(p1, p2 Parser) Parser {
-	return func(input string) (remaining string, matched []string, err error) {
+	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
-		remaining, matched1, err := p1(remaining)
+		remaining, left, err := p1(remaining)
 		if err != nil {
 			return
 		}
-		remaining, matched2, err := p2(remaining)
+		remaining, right, err := p2(remaining)
 		if err != nil {
 			return
 		}
-		matched = append(matched1, matched2...)
+		matched = MatchedPair{Left: left, Right: right}
 		return
 	}
 }
 
-func head(p1, p2 Parser) Parser {
+func left(p1, p2 Parser) Parser {
 	p := pair(p1, p2)
-	return func(input string) (remaining string, matched []string, err error) {
+	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
-		remaining, match, err := p(remaining)
+		remaining, pair, err := p(remaining)
 		if err != nil {
 			return
 		}
-		matched = match[:1]
+		matched = pair.(MatchedPair).Left
 		return
 	}
 }
 
-func tail(p1, p2 Parser) Parser {
+func right(p1, p2 Parser) Parser {
 	p := pair(p1, p2)
-	return func(input string) (remaining string, matched []string, err error) {
+	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
-		remaining, match, err := p(remaining)
+		remaining, pair, err := p(remaining)
 		if err != nil {
 			return
 		}
-		matched = match[1:]
+		matched = pair.(MatchedPair).Right
 		return
 	}
 }
 
 func oneOrMore(p Parser) Parser {
-	return func(input string) (remaining string, matched []string, err error) {
+	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		remaining, match, err := p(remaining)
 		if err != nil {
 			return
 		}
-		matched = append(matched, match...)
+		var matches []interface{}
+		matches = append(matches, match)
 		for {
 			remaining, match, err = p(remaining)
 			if err != nil {
 				break
 			}
-			matched = append(matched, match...)
+			matches = append(matches, match)
 			if remaining == "" {
 				break
 			}
 		}
+		matched = matches
 		return
 	}
 }
 
 func zeroOrMore(p Parser) Parser {
-	return func(input string) (remaining string, matched []string, err error) {
+	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
+		var matches []interface{}
 		for {
-			var match []string
+			var match interface{}
 			var _err error
 			remaining, match, _err = p(remaining)
 			if _err != nil {
 				break
 			}
-			matched = append(matched, match...)
+			matches = append(matches, match)
 			if remaining == "" {
 				break
 			}
 		}
+		matched = matches
 		return
 	}
 }
 
-func anyChar(input string) (remaining string, matched []string, err error) {
+func anyChar(input string) (remaining string, matched interface{}, err error) {
 	r, size := utf8.DecodeRuneInString(input)
 	if r == utf8.RuneError {
 		err = errors.New(remaining)
 		return
 	}
 	remaining = input[size:]
-	matched = []string{string(r)}
+	matched = r
 	return
 }
 
-func pred(p Parser, f func(matched []string) bool) Parser {
-	return func(input string) (remaining string, matched []string, err error) {
+func pred(p Parser, f func(matched interface{}) bool) Parser {
+	return func(input string) (remaining string, matched interface{}, err error) {
 		r, m, err := p(input)
 		if err != nil {
 			return
