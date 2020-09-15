@@ -22,7 +22,7 @@ func Test_literal(t *testing.T) {
 	}
 	{
 		_, _, err := parseJoe("Hello Mike!")
-		assert.EqualError(t, err, "Hello Mike!")
+		assert.EqualError(t, err, "wanted a literal \"Hello Joe!\", got: \"Hello Mike!\"")
 	}
 }
 
@@ -55,7 +55,7 @@ func Test_pair(t *testing.T) {
 	}
 	{
 		_, _, err := tagOpener("oops")
-		assert.EqualError(t, err, "oops")
+		assert.EqualError(t, err, "wanted a literal \"<\", got: \"oops\"")
 	}
 	{
 		_, _, err := tagOpener("<!oops")
@@ -83,11 +83,11 @@ func Test_oneOrMore(t *testing.T) {
 	}
 	{
 		_, _, err := p("ahah")
-		assert.EqualError(t, err, "ahah")
+		assert.EqualError(t, err, "wanted a literal \"ha\", got: \"ahah\"")
 	}
 	{
 		_, _, err := p("")
-		assert.EqualError(t, err, "")
+		assert.EqualError(t, err, "wanted a literal \"ha\", got: \"\"")
 	}
 }
 
@@ -101,13 +101,13 @@ func Test_zeroOrMore(t *testing.T) {
 	}
 	{
 		remaining, matched, err := p("ahah")
-		assert.Equal(t, remaining, "ahah")
+		assert.Equal(t, "ahah", remaining)
 		assert.Empty(t, matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := p("")
-		assert.Equal(t, remaining, "")
+		assert.Equal(t, "", remaining)
 		assert.Empty(t, matched)
 		assert.NoError(t, err)
 	}
@@ -124,7 +124,16 @@ func Test_pred(t *testing.T) {
 		assert.NoError(t, err)
 	}
 	{
-		_, _, err := p("lol")
+		remaining, _, err := p("lol")
+		assert.Equal(t, "lol", remaining)
 		assert.EqualError(t, err, "lol")
 	}
+}
+
+func Test_quotedString(t *testing.T) {
+	p := quotedString()
+	remaining, matched, err := p(`"Hello Joe!"`)
+	assert.Equal(t, "", remaining)
+	assert.Equal(t, "Hello Joe!", matched)
+	assert.NoError(t, err)
 }

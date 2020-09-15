@@ -2,6 +2,7 @@ package jo
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -14,12 +15,12 @@ type Parser func(input string) (remaining string, matched interface{}, err error
 func literal(s string) func(input string) (remaining string, matched interface{}, err error) {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
-		if strings.HasPrefix(input, s) {
-			remaining = strings.TrimPrefix(input, s)
+		if strings.HasPrefix(remaining, s) {
+			remaining = strings.TrimPrefix(remaining, s)
 			matched = s
 			return
 		}
-		err = errors.New(input)
+		err = errors.New(fmt.Sprintf("wanted a literal %q, got: %q", s, remaining))
 		return
 	}
 }
@@ -135,7 +136,8 @@ func zeroOrMore(p Parser) Parser {
 }
 
 func anyChar(input string) (remaining string, matched interface{}, err error) {
-	r, size := utf8.DecodeRuneInString(input)
+	remaining = input
+	r, size := utf8.DecodeRuneInString(remaining)
 	if r == utf8.RuneError {
 		err = errors.New(remaining)
 		return
@@ -147,7 +149,8 @@ func anyChar(input string) (remaining string, matched interface{}, err error) {
 
 func pred(p Parser, f func(matched interface{}) bool) Parser {
 	return func(input string) (remaining string, matched interface{}, err error) {
-		r, m, err := p(input)
+		remaining = input
+		r, m, err := p(remaining)
 		if err != nil {
 			return
 		}
@@ -159,4 +162,48 @@ func pred(p Parser, f func(matched interface{}) bool) Parser {
 		}
 		return
 	}
+}
+
+func whitespaceChar() Parser {
+	return pred(anyChar, func(matched interface{}) bool {
+		return unicode.IsSpace(matched.(rune))
+	})
+}
+
+func space1() Parser {
+	return oneOrMore(whitespaceChar())
+}
+
+func space0() Parser {
+	return zeroOrMore(whitespaceChar())
+}
+
+func mapResult(p Parser, f func(matched interface{}) interface{}) Parser {
+	return func(input string) (remaining string, matched interface{}, err error) {
+		remaining = input
+		remaining, matched, err = p(remaining)
+		if err != nil {
+			return
+		}
+		matched = f(matched)
+		return
+	}
+}
+
+func quotedString() Parser {
+	return mapResult(right(
+		literal(`"`),
+		left(
+			zeroOrMore(pred(anyChar, func(matched interface{}) bool {
+				return matched.(rune) != '"'
+			})),
+			literal(`"`))),
+		func(matched interface{}) interface{} {
+			var s strings.Builder
+			for _, r := range matched.([]interface{}) {
+				s.WriteRune(r.(rune))
+			}
+			return s.String()
+		},
+	)
 }
