@@ -84,6 +84,12 @@ func Test_OneOrMore(t *testing.T) {
 		assert.NoError(t, err)
 	}
 	{
+		remaining, matched, err := p("hahaha ahah")
+		assert.Equal(t, " ahah", remaining)
+		assert.Equal(t, []interface{}{"ha", "ha", "ha"}, matched)
+		assert.NoError(t, err)
+	}
+	{
 		_, _, err := p("ahah")
 		assert.EqualError(t, err, "wanted a literal \"ha\", got: \"ahah\"")
 	}
@@ -198,4 +204,12 @@ func Test_SExpr(t *testing.T) {
 		assert.Equal(t, []interface{}{"func", "main", []interface{}{}}, matched)
 		assert.NoError(t, err)
 	})
+}
+
+func TestPackageClause(t *testing.T) {
+	p := PackageClause()
+	remaining, matched, err := p("package main")
+	assert.Equal(t, "", remaining)
+	assert.Equal(t, "main", matched)
+	assert.NoError(t, err)
 }

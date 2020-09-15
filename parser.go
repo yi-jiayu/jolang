@@ -100,8 +100,9 @@ func OneOrMore(p Parser) Parser {
 		}
 		matches := []interface{}{match}
 		for {
-			remaining, match, err = p(remaining)
-			if err != nil {
+			var e error
+			remaining, match, e = p(remaining)
+			if e != nil {
 				break
 			}
 			matches = append(matches, match)
@@ -248,4 +249,8 @@ func SExpr() Parser {
 
 func SExprs() Parser {
 	return ZeroOrMore(WhitespaceWrap(SExpr()))
+}
+
+func PackageClause() Parser {
+	return Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), Identifier))
 }
