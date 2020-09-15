@@ -45,18 +45,21 @@ func Identifier(input string) (remaining string, matched interface{}, err error)
 	return
 }
 
-func identifier() Parser {
-	return Map(Identifier, func(matched interface{}) interface{} {
-		ident := matched.(string)
-		tok := token.Lookup(ident)
-		if tok == token.IDENT {
-			return &ast.Ident{
-				Name: matched.(string),
-			}
+var unqualifiedIdent = Map(Identifier, func(matched interface{}) interface{} {
+	ident := matched.(string)
+	tok := token.Lookup(ident)
+	if tok == token.IDENT {
+		return &ast.Ident{
+			Name: matched.(string),
 		}
-		return tok
-	})
-}
+	}
+	return tok
+})
+
+var identifier = Choice(
+	QualifiedIdent,
+	unqualifiedIdent,
+)
 
 type MatchedPair struct {
 	Left  interface{}
@@ -76,6 +79,25 @@ func Pair(p1, p2 Parser) Parser {
 		}
 		remaining = r
 		matched = MatchedPair{Left: left, Right: right}
+		return
+	}
+}
+
+func List(ps ...Parser) Parser {
+	return func(input string) (remaining string, matched interface{}, err error) {
+		remaining = input
+		r := remaining
+		var matches []interface{}
+		for _, p := range ps {
+			var m interface{}
+			r, m, err = p(r)
+			if err != nil {
+				return
+			}
+			matches = append(matches, m)
+		}
+		remaining = r
+		matched = matches
 		return
 	}
 }
@@ -251,7 +273,7 @@ func (p SExprParser) Parse(input string) (remaining string, matched interface{},
 	return Right(Literal("("),
 		Left(
 			ZeroOrMore(
-				WhitespaceWrap(Choice(identifier(), basicLit(), p.Parse)),
+				WhitespaceWrap(Choice(identifier, basicLit(), p.Parse)),
 			),
 			Literal(")"),
 		),
@@ -264,10 +286,6 @@ func SExpr() Parser {
 
 func SExprs() Parser {
 	return ZeroOrMore(WhitespaceWrap(SExpr()))
-}
-
-func PackageClause() Parser {
-	return Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), Identifier))
 }
 
 func decimalLit() Parser {
@@ -338,15 +356,15 @@ func SExpr2(p Parser) Parser {
 	return Delimited('(', ')', WhitespaceWrap(p))
 }
 
-func ImportClause() Parser {
-	return SExpr2(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier())))
+func PackageClause() Parser {
+	return SExpr2(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier)))
 }
 
 func CallExpr() Parser {
-	return Map(SExpr2(Pair(identifier(), Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(basicLit()))))),
+	return Map(SExpr2(Pair(identifier, Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(basicLit()))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
-			fun := pair.Left.(*ast.Ident)
+			fun := pair.Left.(ast.Expr)
 			var args []ast.Expr
 			for _, basicLit := range pair.Right.([]interface{}) {
 				args = append(args, basicLit.(ast.Expr))
@@ -370,7 +388,7 @@ func Noop() Parser {
 }
 
 func FunctionDecl() Parser {
-	return Map(SExpr2(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(identifier(), Right(Right(OneOrMoreWhitespaceChars(), SExpr2(Noop())), WhitespaceWrap(StatementList())))))),
+	return Map(SExpr2(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(identifier, Right(Right(OneOrMoreWhitespaceChars(), SExpr2(Noop())), WhitespaceWrap(StatementList())))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
 			name := pair.Left.(*ast.Ident)
@@ -389,18 +407,51 @@ func FunctionDecl() Parser {
 	)
 }
 
-func SourceFile() Parser {
-	return Map(Pair(WhitespaceWrap(ImportClause()), WhitespaceWrap(OneOrMore(WhitespaceWrap(FunctionDecl())))),
+func ImportDecl() Parser {
+	return Map(
+		SExpr2(Right(Literal("import"), Right(OneOrMoreWhitespaceChars(), stringLit()))),
 		func(matched interface{}) interface{} {
-			pair := matched.(MatchedPair)
-			pkgName := pair.Left.(*ast.Ident)
-			var decls []ast.Decl
-			for _, d := range pair.Right.([]interface{}) {
-				decls = append(decls, d.(ast.Decl))
-			}
-			return &ast.File{
-				Name:  pkgName,
-				Decls: decls,
+			path := matched.(*ast.BasicLit)
+			return &ast.GenDecl{
+				Tok: token.IMPORT,
+				Specs: []ast.Spec{
+					&ast.ImportSpec{
+						Path: path,
+					},
+				},
 			}
 		})
 }
+
+var QualifiedIdent = Map(
+	Pair(unqualifiedIdent, Right(Rune('.'), unqualifiedIdent)),
+	func(matched interface{}) interface{} {
+		pair := matched.(MatchedPair)
+		x := pair.Left.(*ast.Ident)
+		sel := pair.Right.(*ast.Ident)
+		return &ast.SelectorExpr{
+			X:   x,
+			Sel: sel,
+		}
+	})
+
+var SourceFile = Map(
+	List(
+		WhitespaceWrap(PackageClause()),
+		WhitespaceWrap(ZeroOrMore(WhitespaceWrap(ImportDecl()))),
+		WhitespaceWrap(OneOrMore(WhitespaceWrap(FunctionDecl())))),
+	func(matched interface{}) interface{} {
+		matches := matched.([]interface{})
+		pkgName := matches[0].(*ast.Ident)
+		var decls []ast.Decl
+		for _, d := range matches[1].([]interface{}) {
+			decls = append(decls, d.(ast.Decl))
+		}
+		for _, d := range matches[2].([]interface{}) {
+			decls = append(decls, d.(ast.Decl))
+		}
+		return &ast.File{
+			Name:  pkgName,
+			Decls: decls,
+		}
+	})

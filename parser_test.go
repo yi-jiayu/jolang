@@ -221,14 +221,6 @@ func Test_SExpr(t *testing.T) {
 	})
 }
 
-func TestPackageClause(t *testing.T) {
-	p := PackageClause()
-	remaining, matched, err := p("package main")
-	assert.Equal(t, "", remaining)
-	assert.Equal(t, "main", matched)
-	assert.NoError(t, err)
-}
-
 func Test_decimalLit(t *testing.T) {
 	p := decimalLit()
 	{
@@ -254,34 +246,35 @@ func Test_stringLit(t *testing.T) {
 }
 
 func TestSourceFile(t *testing.T) {
-	p := SourceFile()
-	const input = `(package main)
+	t.Run("without imports", func(t *testing.T) {
+		const input = `(package main)
 
 (func main () (println "Hello, World"))`
-	_, matched, err := p(input)
-	assert.Equal(t, &ast.File{
-		Name: &ast.Ident{
-			Name: "main",
-		},
-		Decls: []ast.Decl{
-			&ast.FuncDecl{
-				Name: &ast.Ident{
-					Name: "main",
-				},
-				Type: &ast.FuncType{
-					Params: &ast.FieldList{},
-				},
-				Body: &ast.BlockStmt{
-					List: []ast.Stmt{
-						&ast.ExprStmt{
-							X: &ast.CallExpr{
-								Fun: &ast.Ident{
-									Name: "println",
-								},
-								Args: []ast.Expr{
-									&ast.BasicLit{
-										Kind:  token.STRING,
-										Value: "\"Hello, World\"",
+		_, matched, err := SourceFile(input)
+		assert.Equal(t, &ast.File{
+			Name: &ast.Ident{
+				Name: "main",
+			},
+			Decls: []ast.Decl{
+				&ast.FuncDecl{
+					Name: &ast.Ident{
+						Name: "main",
+					},
+					Type: &ast.FuncType{
+						Params: &ast.FieldList{},
+					},
+					Body: &ast.BlockStmt{
+						List: []ast.Stmt{
+							&ast.ExprStmt{
+								X: &ast.CallExpr{
+									Fun: &ast.Ident{
+										Name: "println",
+									},
+									Args: []ast.Expr{
+										&ast.BasicLit{
+											Kind:  token.STRING,
+											Value: "\"Hello, World\"",
+										},
 									},
 								},
 							},
@@ -289,9 +282,62 @@ func TestSourceFile(t *testing.T) {
 					},
 				},
 			},
-		},
-	}, matched)
-	assert.NoError(t, err)
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("with imports", func(t *testing.T) {
+		const input = `(package main)
+
+(import "fmt")
+
+(func main () (fmt.Println 1))`
+		_, matched, err := SourceFile(input)
+		assert.Equal(t, &ast.File{
+			Name: &ast.Ident{
+				Name: "main",
+			},
+			Decls: []ast.Decl{
+				&ast.GenDecl{
+					Tok: token.IMPORT,
+					Specs: []ast.Spec{
+						&ast.ImportSpec{
+							Path: &ast.BasicLit{
+								Kind:  token.STRING,
+								Value: "\"fmt\"",
+							},
+						},
+					},
+				},
+				&ast.FuncDecl{
+					Name: &ast.Ident{
+						Name: "main",
+					},
+					Type: &ast.FuncType{
+						Params: &ast.FieldList{},
+					},
+					Body: &ast.BlockStmt{
+						List: []ast.Stmt{
+							&ast.ExprStmt{
+								X: &ast.CallExpr{
+									Fun: &ast.SelectorExpr{
+										X:   ident("fmt"),
+										Sel: ident("Println"),
+									},
+									Args: []ast.Expr{
+										&ast.BasicLit{
+											Kind:  token.INT,
+											Value: "1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
 }
 
 func TestSExpr2(t *testing.T) {
@@ -342,4 +388,62 @@ func TestFunctionDecl(t *testing.T) {
 	}, matched)
 	assert.NoError(t, err)
 
+}
+
+func TestList(t *testing.T) {
+	p := List(Literal("hello"), Literal(" "), Literal("world"))
+	remaining, matched, err := p("hello world!")
+	assert.Equal(t, "!", remaining)
+	assert.Equal(t, []interface{}{"hello", " ", "world"}, matched)
+	assert.NoError(t, err)
+}
+
+func TestImportDecl(t *testing.T) {
+	p := ImportDecl()
+	_, matched, err := p(`(import "fmt")`)
+	assert.Equal(t, &ast.GenDecl{
+		Tok: token.IMPORT,
+		Specs: []ast.Spec{
+			&ast.ImportSpec{
+				Path: &ast.BasicLit{
+					Kind:  token.STRING,
+					Value: "\"fmt\"",
+				},
+			},
+		},
+	}, matched)
+	assert.NoError(t, err)
+}
+
+func TestQualifiedIdent(t *testing.T) {
+	_, matched, err := QualifiedIdent("fmt.Println")
+	assert.Equal(t, &ast.SelectorExpr{
+		X: &ast.Ident{
+			Name: "fmt",
+		},
+		Sel: &ast.Ident{
+			Name: "Println",
+		},
+	}, matched)
+	assert.NoError(t, err)
+}
+
+func Test_identifier(t *testing.T) {
+	t.Run("unqualified", func(t *testing.T) {
+		_, matched, err := identifier("println")
+		assert.Equal(t, ident("println"), matched)
+		assert.NoError(t, err)
+	})
+	t.Run("qualified indentifier", func(t *testing.T) {
+		_, matched, err := identifier("fmt.Println")
+		assert.Equal(t, &ast.SelectorExpr{
+			X: &ast.Ident{
+				Name: "fmt",
+			},
+			Sel: &ast.Ident{
+				Name: "Println",
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
 }

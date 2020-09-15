@@ -4,10 +4,8 @@ import (
 	"go/ast"
 )
 
-var parse = SourceFile()
-
 func Parse(input string) (*ast.File, error) {
-	_, node, err := parse(input)
+	_, node, err := SourceFile(input)
 	if err != nil {
 		return nil, err
 	}
