@@ -498,45 +498,41 @@ func Noop() ParserFunc {
 	}
 }
 
-func FunctionDecl() ParserFunc {
-	return Map(Parenthesized(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(Ident, Right(Right(OneOrMoreWhitespaceChars(), Parenthesized(Noop())), WhitespaceWrap(StatementList())))))),
-		func(matched interface{}) interface{} {
-			pair := matched.(MatchedPair)
-			name := pair.Left.(*ast.Ident)
-			var body []ast.Stmt
-			for _, callExpr := range pair.Right.([]interface{}) {
-				body = append(body, &ast.ExprStmt{X: callExpr.(*ast.CallExpr)})
-			}
-			return &ast.FuncDecl{
-				Name: name,
-				Type: &ast.FuncType{Params: &ast.FieldList{}},
-				Body: &ast.BlockStmt{
-					List: body,
-				},
-			}
-		},
-	)
-}
+var FunctionDecl = Map(Parenthesized(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(Ident, Right(Right(OneOrMoreWhitespaceChars(), Parenthesized(Noop())), WhitespaceWrap(StatementList())))))),
+	func(matched interface{}) interface{} {
+		pair := matched.(MatchedPair)
+		name := pair.Left.(*ast.Ident)
+		var body []ast.Stmt
+		for _, callExpr := range pair.Right.([]interface{}) {
+			body = append(body, &ast.ExprStmt{X: callExpr.(*ast.CallExpr)})
+		}
+		return &ast.FuncDecl{
+			Name: name,
+			Type: &ast.FuncType{Params: &ast.FieldList{}},
+			Body: &ast.BlockStmt{
+				List: body,
+			},
+		}
+	},
+)
 
-var TopLevelDecl = Choice(TypeDecl, FunctionDecl())
+var TopLevelDecl = Choice(TypeDecl, FunctionDecl)
 
-func ImportDecl() ParserFunc {
-	return Map(
-		Parenthesized(Right(Literal("import"), OneOrMore(Right(OneOrMoreWhitespaceChars(), stringLit())))),
-		func(matched interface{}) interface{} {
-			matches := matched.([]interface{})
-			var specs []ast.Spec
-			for _, path := range matches {
-				specs = append(specs, &ast.ImportSpec{
-					Path: path.(*ast.BasicLit),
-				})
-			}
-			return &ast.GenDecl{
-				Tok:   token.IMPORT,
-				Specs: specs,
-			}
-		})
-}
+var ImportDecl = Map(
+	Parenthesized(Right(Literal("import"), OneOrMore(Right(OneOrMoreWhitespaceChars(), stringLit())))),
+	func(matched interface{}) interface{} {
+		matches := matched.([]interface{})
+		var specs []ast.Spec
+		for _, path := range matches {
+			specs = append(specs, &ast.ImportSpec{
+				Path: path.(*ast.BasicLit),
+			})
+		}
+		return &ast.GenDecl{
+			Tok:   token.IMPORT,
+			Specs: specs,
+		}
+	})
 
 var QualifiedIdent = Map(
 	Pair(Ident, Right(Rune('.'), Ident)),
@@ -553,7 +549,7 @@ var QualifiedIdent = Map(
 var SourceFile = Map(
 	Sequence(
 		WhitespaceWrap(PackageClause()),
-		WhitespaceWrap(ZeroOrMore(WhitespaceWrap(ImportDecl()))),
+		WhitespaceWrap(ZeroOrMore(WhitespaceWrap(ImportDecl))),
 		WhitespaceWrap(OneOrMore(WhitespaceWrap(TopLevelDecl)))),
 	func(matched interface{}) interface{} {
 		matches := matched.([]interface{})

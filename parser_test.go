@@ -349,8 +349,7 @@ func Test_callExpr_Parse(t *testing.T) {
 }
 
 func TestFunctionDecl(t *testing.T) {
-	p := FunctionDecl()
-	_, matched, err := p(`(func main () (println "Hello, World"))`)
+	_, matched, err := FunctionDecl(`(func main () (println "Hello, World"))`)
 	assert.Equal(t, &ast.FuncDecl{
 		Name: &ast.Ident{
 			Name: "main",
@@ -389,9 +388,8 @@ func TestList(t *testing.T) {
 }
 
 func TestImportDecl(t *testing.T) {
-	p := ImportDecl()
 	t.Run("single import", func(t *testing.T) {
-		_, matched, err := p(`(import "fmt")`)
+		_, matched, err := ImportDecl(`(import "fmt")`)
 		assert.Equal(t, &ast.GenDecl{
 			Tok: token.IMPORT,
 			Specs: []ast.Spec{
@@ -406,7 +404,7 @@ func TestImportDecl(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("grouped import", func(t *testing.T) {
-		_, matched, err := p(`(import "fmt" "log")`)
+		_, matched, err := ImportDecl(`(import "fmt" "log")`)
 		assert.Equal(t, &ast.GenDecl{
 			Tok: token.IMPORT,
 			Specs: []ast.Spec{
