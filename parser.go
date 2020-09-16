@@ -341,6 +341,33 @@ func PackageClause() ParserFunc {
 	return SExpr(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier)))
 }
 
+func MapConst(p Parser, v interface{}) Parser {
+	return Map(p, func(interface{}) interface{} {
+		return v
+	})
+}
+
+var BinaryOp = Choice(MapConst(Rune('+'), token.ADD), MapConst(Rune('*'), token.MUL))
+
+type binaryExpr struct{}
+
+func (*binaryExpr) Parse(input string) (remaining string, matched interface{}, err error) {
+	return Map(
+		SExpr(Pair(BinaryOp, Right(OneOrMoreWhitespaceChars(), Pair(Expr, Right(OneOrMoreWhitespaceChars(), Expr))))),
+		func(matched interface{}) interface{} {
+			pair := matched.(MatchedPair)
+			operands := pair.Right.(MatchedPair)
+			return &ast.BinaryExpr{
+				X:  operands.Left.(ast.Expr),
+				Op: pair.Left.(token.Token),
+				Y:  operands.Right.(ast.Expr),
+			}
+		},
+	)(input)
+}
+
+var BinaryExpr *binaryExpr
+
 type callExpr struct{}
 
 func (*callExpr) Parse(input string) (remaining string, matched interface{}, err error) {
@@ -364,7 +391,7 @@ var CallExpr *callExpr
 type expr struct{}
 
 func (*expr) Parse(input string) (remaining string, matched interface{}, err error) {
-	return Choice(basicLit(), CallExpr)(input)
+	return Choice(basicLit(), BinaryExpr, CallExpr)(input)
 }
 
 var Expr *expr

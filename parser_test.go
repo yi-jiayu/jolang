@@ -3,6 +3,7 @@ package jo
 import (
 	"go/ast"
 	"go/token"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -454,6 +455,25 @@ func Test_identifier(t *testing.T) {
 			Sel: &ast.Ident{
 				Name: "Println",
 			},
+		}, matched)
+		assert.NoError(t, err)
+	})
+}
+
+func intLit(v int) *ast.BasicLit {
+	return &ast.BasicLit{
+		Kind:  token.INT,
+		Value: strconv.Itoa(v),
+	}
+}
+
+func Test_binaryExpr_Parse(t *testing.T) {
+	t.Run("single", func(t *testing.T) {
+		_, matched, err := BinaryExpr.Parse(`(+ 1 2)`)
+		assert.Equal(t, &ast.BinaryExpr{
+			X:  intLit(1),
+			Op: token.ADD,
+			Y:  intLit(2),
 		}, matched)
 		assert.NoError(t, err)
 	})
