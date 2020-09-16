@@ -400,19 +400,42 @@ func TestList(t *testing.T) {
 
 func TestImportDecl(t *testing.T) {
 	p := ImportDecl()
-	_, matched, err := p(`(import "fmt")`)
-	assert.Equal(t, &ast.GenDecl{
-		Tok: token.IMPORT,
-		Specs: []ast.Spec{
-			&ast.ImportSpec{
-				Path: &ast.BasicLit{
-					Kind:  token.STRING,
-					Value: "\"fmt\"",
+	t.Run("single import", func(t *testing.T) {
+		_, matched, err := p(`(import "fmt")`)
+		assert.Equal(t, &ast.GenDecl{
+			Tok: token.IMPORT,
+			Specs: []ast.Spec{
+				&ast.ImportSpec{
+					Path: &ast.BasicLit{
+						Kind:  token.STRING,
+						Value: "\"fmt\"",
+					},
 				},
 			},
-		},
-	}, matched)
-	assert.NoError(t, err)
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("grouped import", func(t *testing.T) {
+		_, matched, err := p(`(import "fmt" "log")`)
+		assert.Equal(t, &ast.GenDecl{
+			Tok: token.IMPORT,
+			Specs: []ast.Spec{
+				&ast.ImportSpec{
+					Path: &ast.BasicLit{
+						Kind:  token.STRING,
+						Value: "\"fmt\"",
+					},
+				},
+				&ast.ImportSpec{
+					Path: &ast.BasicLit{
+						Kind:  token.STRING,
+						Value: "\"log\"",
+					},
+				},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
 }
 
 func TestQualifiedIdent(t *testing.T) {

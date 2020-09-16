@@ -409,16 +409,18 @@ func FunctionDecl() Parser {
 
 func ImportDecl() Parser {
 	return Map(
-		SExpr2(Right(Literal("import"), Right(OneOrMoreWhitespaceChars(), stringLit()))),
+		SExpr2(Right(Literal("import"), OneOrMore(Right(OneOrMoreWhitespaceChars(), stringLit())))),
 		func(matched interface{}) interface{} {
-			path := matched.(*ast.BasicLit)
+			matches := matched.([]interface{})
+			var specs []ast.Spec
+			for _, path := range matches {
+				specs = append(specs, &ast.ImportSpec{
+					Path: path.(*ast.BasicLit),
+				})
+			}
 			return &ast.GenDecl{
-				Tok: token.IMPORT,
-				Specs: []ast.Spec{
-					&ast.ImportSpec{
-						Path: path,
-					},
-				},
+				Tok:   token.IMPORT,
+				Specs: specs,
 			}
 		})
 }
