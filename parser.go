@@ -89,7 +89,7 @@ func Pair(p1, p2 Parser) ParserFunc {
 	}
 }
 
-func List(ps ...Parser) ParserFunc {
+func Sequence(ps ...Parser) ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		r := remaining
@@ -330,7 +330,7 @@ func Rune(r rune) ParserFunc {
 	}
 }
 
-func SExpr(p Parser) ParserFunc {
+func Parenthesized(p Parser) ParserFunc {
 	return Right(Rune('('),
 		Left(p,
 			Rune(')')),
@@ -338,7 +338,7 @@ func SExpr(p Parser) ParserFunc {
 }
 
 func PackageClause() ParserFunc {
-	return SExpr(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier)))
+	return Parenthesized(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier)))
 }
 
 func MapConst(p Parser, v interface{}) Parser {
@@ -353,7 +353,7 @@ type binaryExpr struct{}
 
 func (*binaryExpr) Parse(input string) (remaining string, matched interface{}, err error) {
 	return Map(
-		SExpr(Pair(BinaryOp, Right(OneOrMoreWhitespaceChars(), Pair(Expr, Right(OneOrMoreWhitespaceChars(), Expr))))),
+		Parenthesized(Pair(BinaryOp, Right(OneOrMoreWhitespaceChars(), Pair(Expr, Right(OneOrMoreWhitespaceChars(), Expr))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
 			operands := pair.Right.(MatchedPair)
@@ -371,7 +371,7 @@ var BinaryExpr *binaryExpr
 type callExpr struct{}
 
 func (*callExpr) Parse(input string) (remaining string, matched interface{}, err error) {
-	return Map(SExpr(Pair(identifier, Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(Expr))))),
+	return Map(Parenthesized(Pair(identifier, Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(Expr))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
 			fun := pair.Left.(ast.Expr)
@@ -408,7 +408,7 @@ func Noop() ParserFunc {
 }
 
 func FunctionDecl() ParserFunc {
-	return Map(SExpr(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(identifier, Right(Right(OneOrMoreWhitespaceChars(), SExpr(Noop())), WhitespaceWrap(StatementList())))))),
+	return Map(Parenthesized(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(identifier, Right(Right(OneOrMoreWhitespaceChars(), Parenthesized(Noop())), WhitespaceWrap(StatementList())))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
 			name := pair.Left.(*ast.Ident)
@@ -429,7 +429,7 @@ func FunctionDecl() ParserFunc {
 
 func ImportDecl() ParserFunc {
 	return Map(
-		SExpr(Right(Literal("import"), OneOrMore(Right(OneOrMoreWhitespaceChars(), stringLit())))),
+		Parenthesized(Right(Literal("import"), OneOrMore(Right(OneOrMoreWhitespaceChars(), stringLit())))),
 		func(matched interface{}) interface{} {
 			matches := matched.([]interface{})
 			var specs []ast.Spec
@@ -458,7 +458,7 @@ var QualifiedIdent = Map(
 	})
 
 var SourceFile = Map(
-	List(
+	Sequence(
 		WhitespaceWrap(PackageClause()),
 		WhitespaceWrap(ZeroOrMore(WhitespaceWrap(ImportDecl()))),
 		WhitespaceWrap(OneOrMore(WhitespaceWrap(FunctionDecl())))),

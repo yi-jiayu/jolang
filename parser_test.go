@@ -303,7 +303,7 @@ func TestSourceFile(t *testing.T) {
 }
 
 func TestSExpr(t *testing.T) {
-	p := SExpr(OneOrMore(WhitespaceWrap(Identifier)))
+	p := Parenthesized(OneOrMore(WhitespaceWrap(Identifier)))
 	remaining, matched, err := p("(hello world)")
 	assert.Equal(t, "", remaining)
 	assert.Equal(t, []interface{}{"hello", "world"}, matched)
@@ -380,7 +380,7 @@ func TestFunctionDecl(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
-	p := List(Literal("hello"), Literal(" "), Literal("world"))
+	p := Sequence(Literal("hello"), Literal(" "), Literal("world"))
 	remaining, matched, err := p("hello world!")
 	assert.Equal(t, "!", remaining)
 	assert.Equal(t, []interface{}{"hello", " ", "world"}, matched)
