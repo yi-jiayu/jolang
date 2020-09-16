@@ -341,8 +341,10 @@ func PackageClause() ParserFunc {
 	return SExpr(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier)))
 }
 
-func CallExpr() ParserFunc {
-	return Map(SExpr(Pair(identifier, Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(basicLit()))))),
+type callExpr struct{}
+
+func (*callExpr) Parse(input string) (remaining string, matched interface{}, err error) {
+	return Map(SExpr(Pair(identifier, Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(Expr))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
 			fun := pair.Left.(ast.Expr)
@@ -354,11 +356,21 @@ func CallExpr() ParserFunc {
 				Fun:  fun,
 				Args: args,
 			}
-		})
+		})(input)
 }
 
+var CallExpr *callExpr
+
+type expr struct{}
+
+func (*expr) Parse(input string) (remaining string, matched interface{}, err error) {
+	return Choice(basicLit(), CallExpr)(input)
+}
+
+var Expr *expr
+
 func StatementList() ParserFunc {
-	return ZeroOrMore(WhitespaceWrap(CallExpr()))
+	return ZeroOrMore(WhitespaceWrap(CallExpr))
 }
 
 func Noop() ParserFunc {

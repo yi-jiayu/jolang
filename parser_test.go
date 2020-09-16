@@ -310,13 +310,40 @@ func TestSExpr(t *testing.T) {
 }
 
 func TestCallExpr(t *testing.T) {
-	p := CallExpr()
-	_, matched, err := p(`(println "Hello, World")`)
-	assert.Equal(t, &ast.CallExpr{
-		Fun:  ident("println"),
-		Args: []ast.Expr{strLit(`"Hello, World"`)},
-	}, matched)
-	assert.NoError(t, err)
+	t.Run("literal arguments", func(t *testing.T) {
+		_, matched, err := CallExpr.Parse(`(println "Hello, World")`)
+		assert.Equal(t, &ast.CallExpr{
+			Fun:  ident("println"),
+			Args: []ast.Expr{strLit(`"Hello, World"`)},
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("nested call expressions", func(t *testing.T) {
+		_, matched, err := CallExpr.Parse(`(println "Hello" (fmt.Sprint "World"))`)
+		assert.Equal(t, &ast.CallExpr{
+			Fun: ident("println"),
+			Args: []ast.Expr{
+				strLit(`"Hello"`),
+				&ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X: &ast.Ident{
+							Name: "fmt",
+						},
+						Sel: &ast.Ident{
+							Name: "Sprint",
+						},
+					},
+					Args: []ast.Expr{
+						&ast.BasicLit{
+							Kind:  token.STRING,
+							Value: "\"World\"",
+						},
+					},
+				},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
 }
 
 func TestFunctionDecl(t *testing.T) {
