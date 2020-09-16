@@ -182,45 +182,6 @@ func strLit(v string) *ast.BasicLit {
 	}
 }
 
-func Test_SExpr(t *testing.T) {
-	p := SExpr()
-	{
-		remaining, matched, err := p(`()`)
-		assert.Equal(t, "", remaining)
-		assert.Equal(t, []interface{}{}, matched)
-		assert.NoError(t, err)
-	}
-	{
-		remaining, matched, err := p(`(import main)`)
-		assert.Equal(t, "", remaining)
-		assert.Equal(t, []interface{}{token.IMPORT, ident("main")}, matched)
-		assert.NoError(t, err)
-	}
-	{
-		remaining, matched, err := p(`(println "Hello, World")`)
-		assert.Equal(t, "", remaining)
-		assert.Equal(t, []interface{}{ident("println"), strLit("\"Hello, World\"")}, matched)
-		assert.NoError(t, err)
-	}
-	{
-		remaining, matched, err := p(`(	println  "Hello, World" )`)
-		assert.Equal(t, "", remaining)
-		assert.Equal(t, []interface{}{ident("println"), strLit("\"Hello, World\"")}, matched)
-		assert.NoError(t, err)
-	}
-	{
-		remaining, _, err := p(`println "Hello, World"`)
-		assert.Equal(t, `println "Hello, World"`, remaining)
-		assert.EqualError(t, err, "wanted a literal \"(\", got: \"println \\\"Hello, World\\\"\"")
-	}
-	t.Run("recursion", func(t *testing.T) {
-		remaining, matched, err := p(`(func main ())`)
-		assert.Equal(t, "", remaining)
-		assert.Equal(t, []interface{}{token.FUNC, ident("main"), []interface{}{}}, matched)
-		assert.NoError(t, err)
-	})
-}
-
 func Test_decimalLit(t *testing.T) {
 	p := decimalLit()
 	{
@@ -340,8 +301,8 @@ func TestSourceFile(t *testing.T) {
 	})
 }
 
-func TestSExpr2(t *testing.T) {
-	p := SExpr2(OneOrMore(WhitespaceWrap(Identifier)))
+func TestSExpr(t *testing.T) {
+	p := SExpr(OneOrMore(WhitespaceWrap(Identifier)))
 	remaining, matched, err := p("(hello world)")
 	assert.Equal(t, "", remaining)
 	assert.Equal(t, []interface{}{"hello", "world"}, matched)

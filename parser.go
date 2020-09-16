@@ -267,27 +267,6 @@ func WhitespaceWrap(p Parser) Parser {
 	return Right(ZeroOrMoreWhitespaceChars(), Left(p, ZeroOrMoreWhitespaceChars()))
 }
 
-type SExprParser struct{}
-
-func (p SExprParser) Parse(input string) (remaining string, matched interface{}, err error) {
-	return Right(Literal("("),
-		Left(
-			ZeroOrMore(
-				WhitespaceWrap(Choice(identifier, basicLit(), p.Parse)),
-			),
-			Literal(")"),
-		),
-	)(input)
-}
-
-func SExpr() Parser {
-	return SExprParser{}.Parse
-}
-
-func SExprs() Parser {
-	return ZeroOrMore(WhitespaceWrap(SExpr()))
-}
-
 func decimalLit() Parser {
 	decimalDigit := Pred(AnyChar, func(matched interface{}) bool {
 		return unicode.IsDigit(matched.(rune))
@@ -345,23 +324,19 @@ func Rune(r rune) Parser {
 	}
 }
 
-func Delimited(start, end rune, p Parser) Parser {
-	return Right(Rune(start),
+func SExpr(p Parser) Parser {
+	return Right(Rune('('),
 		Left(p,
-			Rune(end)),
+			Rune(')')),
 	)
 }
 
-func SExpr2(p Parser) Parser {
-	return Delimited('(', ')', WhitespaceWrap(p))
-}
-
 func PackageClause() Parser {
-	return SExpr2(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier)))
+	return SExpr(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier)))
 }
 
 func CallExpr() Parser {
-	return Map(SExpr2(Pair(identifier, Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(basicLit()))))),
+	return Map(SExpr(Pair(identifier, Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(basicLit()))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
 			fun := pair.Left.(ast.Expr)
@@ -388,7 +363,7 @@ func Noop() Parser {
 }
 
 func FunctionDecl() Parser {
-	return Map(SExpr2(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(identifier, Right(Right(OneOrMoreWhitespaceChars(), SExpr2(Noop())), WhitespaceWrap(StatementList())))))),
+	return Map(SExpr(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(identifier, Right(Right(OneOrMoreWhitespaceChars(), SExpr(Noop())), WhitespaceWrap(StatementList())))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
 			name := pair.Left.(*ast.Ident)
@@ -409,7 +384,7 @@ func FunctionDecl() Parser {
 
 func ImportDecl() Parser {
 	return Map(
-		SExpr2(Right(Literal("import"), OneOrMore(Right(OneOrMoreWhitespaceChars(), stringLit())))),
+		SExpr(Right(Literal("import"), OneOrMore(Right(OneOrMoreWhitespaceChars(), stringLit())))),
 		func(matched interface{}) interface{} {
 			matches := matched.([]interface{})
 			var specs []ast.Spec
