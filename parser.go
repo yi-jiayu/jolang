@@ -10,11 +10,17 @@ import (
 	"unicode/utf8"
 )
 
-// Symbol, string
+type Parser interface {
+	Parse(input string) (remaining string, matched interface{}, err error)
+}
 
-type Parser func(input string) (remaining string, matched interface{}, err error)
+type ParserFunc func(input string) (remaining string, matched interface{}, err error)
 
-func Literal(s string) func(input string) (remaining string, matched interface{}, err error) {
+func (p ParserFunc) Parse(input string) (remaining string, matched interface{}, err error) {
+	return p(input)
+}
+
+func Literal(s string) ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		if strings.HasPrefix(remaining, s) {
@@ -27,7 +33,7 @@ func Literal(s string) func(input string) (remaining string, matched interface{}
 	}
 }
 
-func Identifier(input string) (remaining string, matched interface{}, err error) {
+var Identifier = ParserFunc(func(input string) (remaining string, matched interface{}, err error) {
 	remaining = input
 	var match strings.Builder
 	for i, r := range remaining {
@@ -43,7 +49,7 @@ func Identifier(input string) (remaining string, matched interface{}, err error)
 	matched = match.String()
 	remaining = remaining[match.Len():]
 	return
-}
+})
 
 var unqualifiedIdent = Map(Identifier, func(matched interface{}) interface{} {
 	ident := matched.(string)
@@ -66,14 +72,14 @@ type MatchedPair struct {
 	Right interface{}
 }
 
-func Pair(p1, p2 Parser) Parser {
+func Pair(p1, p2 Parser) ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
-		r, left, err := p1(remaining)
+		r, left, err := p1.Parse(remaining)
 		if err != nil {
 			return
 		}
-		r, right, err := p2(r)
+		r, right, err := p2.Parse(r)
 		if err != nil {
 			return
 		}
@@ -83,14 +89,14 @@ func Pair(p1, p2 Parser) Parser {
 	}
 }
 
-func List(ps ...Parser) Parser {
+func List(ps ...Parser) ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		r := remaining
 		var matches []interface{}
 		for _, p := range ps {
 			var m interface{}
-			r, m, err = p(r)
+			r, m, err = p.Parse(r)
 			if err != nil {
 				return
 			}
@@ -102,7 +108,7 @@ func List(ps ...Parser) Parser {
 	}
 }
 
-func Left(p1, p2 Parser) Parser {
+func Left(p1, p2 Parser) ParserFunc {
 	p := Pair(p1, p2)
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
@@ -115,7 +121,7 @@ func Left(p1, p2 Parser) Parser {
 	}
 }
 
-func Right(p1, p2 Parser) Parser {
+func Right(p1, p2 Parser) ParserFunc {
 	p := Pair(p1, p2)
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
@@ -128,17 +134,17 @@ func Right(p1, p2 Parser) Parser {
 	}
 }
 
-func OneOrMore(p Parser) Parser {
+func OneOrMore(p Parser) ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
-		remaining, match, err := p(remaining)
+		remaining, match, err := p.Parse(remaining)
 		if err != nil {
 			return
 		}
 		matches := []interface{}{match}
 		for {
 			var e error
-			remaining, match, e = p(remaining)
+			remaining, match, e = p.Parse(remaining)
 			if e != nil {
 				break
 			}
@@ -152,14 +158,14 @@ func OneOrMore(p Parser) Parser {
 	}
 }
 
-func ZeroOrMore(p Parser) Parser {
+func ZeroOrMore(p Parser) ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		matches := make([]interface{}, 0)
 		for {
 			var match interface{}
 			var _err error
-			remaining, match, _err = p(remaining)
+			remaining, match, _err = p.Parse(remaining)
 			if _err != nil {
 				break
 			}
@@ -173,7 +179,7 @@ func ZeroOrMore(p Parser) Parser {
 	}
 }
 
-func AnyChar(input string) (remaining string, matched interface{}, err error) {
+var AnyChar = ParserFunc(func(input string) (remaining string, matched interface{}, err error) {
 	remaining = input
 	r, size := utf8.DecodeRuneInString(remaining)
 	if r == utf8.RuneError {
@@ -183,12 +189,12 @@ func AnyChar(input string) (remaining string, matched interface{}, err error) {
 	remaining = input[size:]
 	matched = r
 	return
-}
+})
 
-func Pred(p Parser, f func(matched interface{}) bool) Parser {
+func Pred(p Parser, f func(matched interface{}) bool) ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
-		r, m, err := p(remaining)
+		r, m, err := p.Parse(remaining)
 		if err != nil {
 			return
 		}
@@ -202,24 +208,24 @@ func Pred(p Parser, f func(matched interface{}) bool) Parser {
 	}
 }
 
-func WhitespaceChar() Parser {
+func WhitespaceChar() ParserFunc {
 	return Pred(AnyChar, func(matched interface{}) bool {
 		return unicode.IsSpace(matched.(rune))
 	})
 }
 
-func OneOrMoreWhitespaceChars() Parser {
+func OneOrMoreWhitespaceChars() ParserFunc {
 	return OneOrMore(WhitespaceChar())
 }
 
-func ZeroOrMoreWhitespaceChars() Parser {
+func ZeroOrMoreWhitespaceChars() ParserFunc {
 	return ZeroOrMore(WhitespaceChar())
 }
 
-func Map(p Parser, f func(matched interface{}) interface{}) Parser {
+func Map(p Parser, f func(matched interface{}) interface{}) ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
-		remaining, matched, err = p(remaining)
+		remaining, matched, err = p.Parse(remaining)
 		if err != nil {
 			return
 		}
@@ -228,7 +234,7 @@ func Map(p Parser, f func(matched interface{}) interface{}) Parser {
 	}
 }
 
-func QuotedString() Parser {
+func QuotedString() ParserFunc {
 	return Map(Right(
 		Literal(`"`),
 		Left(
@@ -246,13 +252,13 @@ func QuotedString() Parser {
 	)
 }
 
-func Choice(ps ...Parser) Parser {
+func Choice(ps ...Parser) ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		var r string
 		var m interface{}
 		for _, p := range ps {
-			r, m, err = p(remaining)
+			r, m, err = p.Parse(remaining)
 			if err == nil {
 				remaining = r
 				matched = m
@@ -263,11 +269,11 @@ func Choice(ps ...Parser) Parser {
 	}
 }
 
-func WhitespaceWrap(p Parser) Parser {
+func WhitespaceWrap(p Parser) ParserFunc {
 	return Right(ZeroOrMoreWhitespaceChars(), Left(p, ZeroOrMoreWhitespaceChars()))
 }
 
-func decimalLit() Parser {
+func decimalLit() ParserFunc {
 	decimalDigit := Pred(AnyChar, func(matched interface{}) bool {
 		return unicode.IsDigit(matched.(rune))
 	})
@@ -293,7 +299,7 @@ func decimalLit() Parser {
 	})
 }
 
-func stringLit() Parser {
+func stringLit() ParserFunc {
 	return Map(QuotedString(), func(matched interface{}) interface{} {
 		return &ast.BasicLit{
 			Kind:  token.STRING,
@@ -302,11 +308,11 @@ func stringLit() Parser {
 	})
 }
 
-func basicLit() Parser {
+func basicLit() ParserFunc {
 	return Choice(decimalLit(), stringLit())
 }
 
-func Rune(r rune) Parser {
+func Rune(r rune) ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		c, size := utf8.DecodeRuneInString(remaining)
@@ -324,18 +330,18 @@ func Rune(r rune) Parser {
 	}
 }
 
-func SExpr(p Parser) Parser {
+func SExpr(p Parser) ParserFunc {
 	return Right(Rune('('),
 		Left(p,
 			Rune(')')),
 	)
 }
 
-func PackageClause() Parser {
+func PackageClause() ParserFunc {
 	return SExpr(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier)))
 }
 
-func CallExpr() Parser {
+func CallExpr() ParserFunc {
 	return Map(SExpr(Pair(identifier, Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(basicLit()))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
@@ -351,18 +357,18 @@ func CallExpr() Parser {
 		})
 }
 
-func StatementList() Parser {
+func StatementList() ParserFunc {
 	return ZeroOrMore(WhitespaceWrap(CallExpr()))
 }
 
-func Noop() Parser {
+func Noop() ParserFunc {
 	return func(input string) (remaining string, matched interface{}, err error) {
 		remaining = input
 		return
 	}
 }
 
-func FunctionDecl() Parser {
+func FunctionDecl() ParserFunc {
 	return Map(SExpr(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(identifier, Right(Right(OneOrMoreWhitespaceChars(), SExpr(Noop())), WhitespaceWrap(StatementList())))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
@@ -382,7 +388,7 @@ func FunctionDecl() Parser {
 	)
 }
 
-func ImportDecl() Parser {
+func ImportDecl() ParserFunc {
 	return Map(
 		SExpr(Right(Literal("import"), OneOrMore(Right(OneOrMoreWhitespaceChars(), stringLit())))),
 		func(matched interface{}) interface{} {
