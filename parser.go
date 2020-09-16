@@ -33,6 +33,7 @@ func Literal(s string) ParserFunc {
 	}
 }
 
+// Identifier matches an identifier string.
 var Identifier = ParserFunc(func(input string) (remaining string, matched interface{}, err error) {
 	remaining = input
 	var match strings.Builder
@@ -51,7 +52,8 @@ var Identifier = ParserFunc(func(input string) (remaining string, matched interf
 	return
 })
 
-var unqualifiedIdent = Map(Identifier, func(matched interface{}) interface{} {
+// Ident matches an &ast.Ident node.
+var Ident = Map(Identifier, func(matched interface{}) interface{} {
 	ident := matched.(string)
 	tok := token.Lookup(ident)
 	if tok == token.IDENT {
@@ -62,9 +64,9 @@ var unqualifiedIdent = Map(Identifier, func(matched interface{}) interface{} {
 	return tok
 })
 
-var identifier = Choice(
+var OperandName = Choice(
 	QualifiedIdent,
-	unqualifiedIdent,
+	Ident,
 )
 
 type MatchedPair struct {
@@ -338,7 +340,7 @@ func Parenthesized(p Parser) ParserFunc {
 }
 
 func PackageClause() ParserFunc {
-	return Parenthesized(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), identifier)))
+	return Parenthesized(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), Ident)))
 }
 
 func MapConst(p Parser, v interface{}) Parser {
@@ -371,7 +373,7 @@ var BinaryExpr *binaryExpr
 type callExpr struct{}
 
 func (*callExpr) Parse(input string) (remaining string, matched interface{}, err error) {
-	return Map(Parenthesized(Pair(identifier, ZeroOrMore(Right(OneOrMoreWhitespaceChars(), Expr)))),
+	return Map(Parenthesized(Pair(OperandName, ZeroOrMore(Right(OneOrMoreWhitespaceChars(), Expr)))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
 			fun := pair.Left.(ast.Expr)
@@ -409,20 +411,19 @@ func (*selector) Parse(input string) (remaining string, matched interface{}, err
 		Parenthesized(Right(
 			Literal("sel"),
 			Right(OneOrMoreWhitespaceChars(), Pair(
-				Identifier,
-				OneOrMore(Right(OneOrMoreWhitespaceChars(), Identifier)))))),
+				Ident,
+				OneOrMore(Right(OneOrMoreWhitespaceChars(), Ident)))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
-			x := pair.Left.(string)
 			path := pair.Right.([]interface{})
 			sel := &ast.SelectorExpr{
-				X:   newIdent(x),
-				Sel: newIdent(path[0].(string)),
+				X:   pair.Left.(*ast.Ident),
+				Sel: path[0].(*ast.Ident),
 			}
 			for _, p := range path[1:] {
 				sel = &ast.SelectorExpr{
 					X:   sel,
-					Sel: newIdent(p.(string)),
+					Sel: p.(*ast.Ident),
 				}
 			}
 			return sel
@@ -430,6 +431,61 @@ func (*selector) Parse(input string) (remaining string, matched interface{}, err
 }
 
 var Selector *selector
+
+type structType struct{}
+
+func (*structType) Parse(input string) (remaining string, matched interface{}, err error) {
+	return Map(Parenthesized(
+		Right(
+			Literal("struct"),
+			ZeroOrMore(
+				Right(
+					ZeroOrMoreWhitespaceChars(),
+					Parenthesized(
+						Pair(Ident, Right(OneOrMoreWhitespaceChars(), Ident))))))),
+		func(matched interface{}) interface{} {
+			matches := matched.([]interface{})
+			var fields []*ast.Field
+			for _, m := range matches {
+				pair := m.(MatchedPair)
+				fields = append(fields, &ast.Field{
+					Names: []*ast.Ident{pair.Left.(*ast.Ident)},
+					Type:  pair.Right.(*ast.Ident),
+				})
+			}
+			return &ast.StructType{
+				Fields: &ast.FieldList{
+					List: fields,
+				},
+			}
+		},
+	)(input)
+}
+
+var StructType *structType
+
+type typeDecl struct{}
+
+func (*typeDecl) Parse(input string) (remaining string, matched interface{}, err error) {
+	return Map(Parenthesized(Right(
+		Literal("type"), Right(OneOrMoreWhitespaceChars(),
+			Pair(Ident, Right(OneOrMoreWhitespaceChars(),
+				StructType))))),
+		func(matched interface{}) interface{} {
+			pair := matched.(MatchedPair)
+			return &ast.GenDecl{
+				Tok: token.TYPE,
+				Specs: []ast.Spec{
+					&ast.TypeSpec{
+						Name: pair.Left.(*ast.Ident),
+						Type: pair.Right.(*ast.StructType),
+					},
+				},
+			}
+		})(input)
+}
+
+var TypeDecl *typeDecl
 
 func StatementList() ParserFunc {
 	return ZeroOrMore(WhitespaceWrap(CallExpr))
@@ -443,7 +499,7 @@ func Noop() ParserFunc {
 }
 
 func FunctionDecl() ParserFunc {
-	return Map(Parenthesized(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(identifier, Right(Right(OneOrMoreWhitespaceChars(), Parenthesized(Noop())), WhitespaceWrap(StatementList())))))),
+	return Map(Parenthesized(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(Ident, Right(Right(OneOrMoreWhitespaceChars(), Parenthesized(Noop())), WhitespaceWrap(StatementList())))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
 			name := pair.Left.(*ast.Ident)
@@ -461,6 +517,8 @@ func FunctionDecl() ParserFunc {
 		},
 	)
 }
+
+var TopLevelDecl = Choice(TypeDecl, FunctionDecl())
 
 func ImportDecl() ParserFunc {
 	return Map(
@@ -481,7 +539,7 @@ func ImportDecl() ParserFunc {
 }
 
 var QualifiedIdent = Map(
-	Pair(unqualifiedIdent, Right(Rune('.'), unqualifiedIdent)),
+	Pair(Ident, Right(Rune('.'), Ident)),
 	func(matched interface{}) interface{} {
 		pair := matched.(MatchedPair)
 		x := pair.Left.(*ast.Ident)
@@ -496,7 +554,7 @@ var SourceFile = Map(
 	Sequence(
 		WhitespaceWrap(PackageClause()),
 		WhitespaceWrap(ZeroOrMore(WhitespaceWrap(ImportDecl()))),
-		WhitespaceWrap(OneOrMore(WhitespaceWrap(FunctionDecl())))),
+		WhitespaceWrap(OneOrMore(WhitespaceWrap(TopLevelDecl)))),
 	func(matched interface{}) interface{} {
 		matches := matched.([]interface{})
 		pkgName := matches[0].(*ast.Ident)

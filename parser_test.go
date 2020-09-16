@@ -443,12 +443,12 @@ func TestQualifiedIdent(t *testing.T) {
 
 func Test_identifier(t *testing.T) {
 	t.Run("unqualified", func(t *testing.T) {
-		_, matched, err := identifier("println")
+		_, matched, err := OperandName("println")
 		assert.Equal(t, newIdent("println"), matched)
 		assert.NoError(t, err)
 	})
 	t.Run("qualified indentifier", func(t *testing.T) {
-		_, matched, err := identifier("fmt.Println")
+		_, matched, err := OperandName("fmt.Println")
 		assert.Equal(t, &ast.SelectorExpr{
 			X: &ast.Ident{
 				Name: "fmt",
@@ -492,6 +492,52 @@ func Test_selector_Parse(t *testing.T) {
 				Sel: newIdent("Middle"),
 			},
 			Sel: newIdent("Inner"),
+		}, matched)
+		assert.NoError(t, err)
+	})
+}
+
+func Test_structType_Parse(t *testing.T) {
+	t.Run("simple", func(t *testing.T) {
+		_, matched, err := StructType.Parse(`(struct (Field1 int) (Field2 string))`)
+		assert.Equal(t, &ast.StructType{
+			Fields: &ast.FieldList{
+				List: []*ast.Field{
+					{
+						Names: []*ast.Ident{{Name: "Field1"}},
+						Type:  &ast.Ident{Name: "int"},
+					},
+					{
+						Names: []*ast.Ident{{Name: "Field2"}},
+						Type:  &ast.Ident{Name: "string"},
+					},
+				},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
+}
+
+func Test_typeDecl_Parse(t *testing.T) {
+	t.Run("struct", func(t *testing.T) {
+		_, matched, err := TypeDecl.Parse(`(type MyStruct (struct (Field string)))`)
+		assert.Equal(t, &ast.GenDecl{
+			Tok: token.TYPE,
+			Specs: []ast.Spec{
+				&ast.TypeSpec{
+					Name: &ast.Ident{Name: "MyStruct"},
+					Type: &ast.StructType{
+						Fields: &ast.FieldList{
+							List: []*ast.Field{
+								{
+									Names: []*ast.Ident{{Name: "Field"}},
+									Type:  &ast.Ident{Name: "string"},
+								},
+							},
+						},
+					},
+				},
+			},
 		}, matched)
 		assert.NoError(t, err)
 	})
