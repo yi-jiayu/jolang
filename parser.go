@@ -371,7 +371,7 @@ var BinaryExpr *binaryExpr
 type callExpr struct{}
 
 func (*callExpr) Parse(input string) (remaining string, matched interface{}, err error) {
-	return Map(Parenthesized(Pair(identifier, Right(OneOrMoreWhitespaceChars(), ZeroOrMore(WhitespaceWrap(Expr))))),
+	return Map(Parenthesized(Pair(identifier, ZeroOrMore(Right(OneOrMoreWhitespaceChars(), Expr)))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
 			fun := pair.Left.(ast.Expr)

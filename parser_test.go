@@ -310,12 +310,19 @@ func TestSExpr(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestCallExpr(t *testing.T) {
+func Test_callExpr_Parse(t *testing.T) {
 	t.Run("literal arguments", func(t *testing.T) {
 		_, matched, err := CallExpr.Parse(`(println "Hello, World")`)
 		assert.Equal(t, &ast.CallExpr{
 			Fun:  ident("println"),
 			Args: []ast.Expr{strLit(`"Hello, World"`)},
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("no arguments", func(t *testing.T) {
+		_, matched, err := CallExpr.Parse(`(f)`)
+		assert.Equal(t, &ast.CallExpr{
+			Fun: ident("f"),
 		}, matched)
 		assert.NoError(t, err)
 	})
