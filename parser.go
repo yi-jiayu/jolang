@@ -393,7 +393,7 @@ var CallExpr *callExpr
 type expr struct{}
 
 func (*expr) Parse(input string) (remaining string, matched interface{}, err error) {
-	return Choice(basicLit(), BinaryExpr, CallExpr)(input)
+	return Choice(basicLit(), BinaryExpr, Selector, CallExpr, OperandName)(input)
 }
 
 var Expr *expr
@@ -404,6 +404,12 @@ func newIdent(v string) *ast.Ident {
 	}
 }
 
+type selectorCall *ast.Ident
+
+var SelectorCall = Map(Right(Rune('.'), Ident), func(matched interface{}) interface{} {
+	return selectorCall(matched.(*ast.Ident))
+})
+
 type selector struct{}
 
 func (*selector) Parse(input string) (remaining string, matched interface{}, err error) {
@@ -411,22 +417,28 @@ func (*selector) Parse(input string) (remaining string, matched interface{}, err
 		Parenthesized(Right(
 			Literal("sel"),
 			Right(OneOrMoreWhitespaceChars(), Pair(
-				Ident,
-				OneOrMore(Right(OneOrMoreWhitespaceChars(), Ident)))))),
+				Expr,
+				OneOrMore(Right(OneOrMoreWhitespaceChars(), Choice(SelectorCall, Ident))))))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
-			path := pair.Right.([]interface{})
-			sel := &ast.SelectorExpr{
-				X:   pair.Left.(*ast.Ident),
-				Sel: path[0].(*ast.Ident),
-			}
-			for _, p := range path[1:] {
-				sel = &ast.SelectorExpr{
-					X:   sel,
-					Sel: p.(*ast.Ident),
+			expr := pair.Left.(ast.Expr)
+			for _, p := range pair.Right.([]interface{}) {
+				switch x := p.(type) {
+				case *ast.Ident:
+					expr = &ast.SelectorExpr{
+						X:   expr,
+						Sel: x,
+					}
+				case selectorCall:
+					expr = &ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X:   expr,
+							Sel: x,
+						},
+					}
 				}
 			}
-			return sel
+			return expr
 		})(input)
 }
 
