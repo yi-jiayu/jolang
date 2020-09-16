@@ -170,12 +170,6 @@ func Test_Choice(t *testing.T) {
 	}
 }
 
-func ident(v string) *ast.Ident {
-	return &ast.Ident{
-		Name: v,
-	}
-}
-
 func strLit(v string) *ast.BasicLit {
 	return &ast.BasicLit{
 		Kind:  token.STRING,
@@ -282,8 +276,8 @@ func TestSourceFile(t *testing.T) {
 							&ast.ExprStmt{
 								X: &ast.CallExpr{
 									Fun: &ast.SelectorExpr{
-										X:   ident("fmt"),
-										Sel: ident("Println"),
+										X:   newIdent("fmt"),
+										Sel: newIdent("Println"),
 									},
 									Args: []ast.Expr{
 										&ast.BasicLit{
@@ -314,7 +308,7 @@ func Test_callExpr_Parse(t *testing.T) {
 	t.Run("literal arguments", func(t *testing.T) {
 		_, matched, err := CallExpr.Parse(`(println "Hello, World")`)
 		assert.Equal(t, &ast.CallExpr{
-			Fun:  ident("println"),
+			Fun:  newIdent("println"),
 			Args: []ast.Expr{strLit(`"Hello, World"`)},
 		}, matched)
 		assert.NoError(t, err)
@@ -322,14 +316,14 @@ func Test_callExpr_Parse(t *testing.T) {
 	t.Run("no arguments", func(t *testing.T) {
 		_, matched, err := CallExpr.Parse(`(f)`)
 		assert.Equal(t, &ast.CallExpr{
-			Fun: ident("f"),
+			Fun: newIdent("f"),
 		}, matched)
 		assert.NoError(t, err)
 	})
 	t.Run("nested call expressions", func(t *testing.T) {
 		_, matched, err := CallExpr.Parse(`(println "Hello" (fmt.Sprint "World"))`)
 		assert.Equal(t, &ast.CallExpr{
-			Fun: ident("println"),
+			Fun: newIdent("println"),
 			Args: []ast.Expr{
 				strLit(`"Hello"`),
 				&ast.CallExpr{
@@ -450,7 +444,7 @@ func TestQualifiedIdent(t *testing.T) {
 func Test_identifier(t *testing.T) {
 	t.Run("unqualified", func(t *testing.T) {
 		_, matched, err := identifier("println")
-		assert.Equal(t, ident("println"), matched)
+		assert.Equal(t, newIdent("println"), matched)
 		assert.NoError(t, err)
 	})
 	t.Run("qualified indentifier", func(t *testing.T) {
@@ -481,6 +475,23 @@ func Test_binaryExpr_Parse(t *testing.T) {
 			X:  intLit(1),
 			Op: token.ADD,
 			Y:  intLit(2),
+		}, matched)
+		assert.NoError(t, err)
+	})
+}
+
+func Test_selector_Parse(t *testing.T) {
+	t.Run("field access", func(t *testing.T) {
+		_, matched, err := Selector.Parse(`(sel myStruct Outer Middle Inner)`)
+		assert.Equal(t, &ast.SelectorExpr{
+			X: &ast.SelectorExpr{
+				X: &ast.SelectorExpr{
+					X:   newIdent("myStruct"),
+					Sel: newIdent("Outer"),
+				},
+				Sel: newIdent("Middle"),
+			},
+			Sel: newIdent("Inner"),
 		}, matched)
 		assert.NoError(t, err)
 	})

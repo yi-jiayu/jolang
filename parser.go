@@ -396,6 +396,41 @@ func (*expr) Parse(input string) (remaining string, matched interface{}, err err
 
 var Expr *expr
 
+func newIdent(v string) *ast.Ident {
+	return &ast.Ident{
+		Name: v,
+	}
+}
+
+type selector struct{}
+
+func (*selector) Parse(input string) (remaining string, matched interface{}, err error) {
+	return Map(
+		Parenthesized(Right(
+			Literal("sel"),
+			Right(OneOrMoreWhitespaceChars(), Pair(
+				Identifier,
+				OneOrMore(Right(OneOrMoreWhitespaceChars(), Identifier)))))),
+		func(matched interface{}) interface{} {
+			pair := matched.(MatchedPair)
+			x := pair.Left.(string)
+			path := pair.Right.([]interface{})
+			sel := &ast.SelectorExpr{
+				X:   newIdent(x),
+				Sel: newIdent(path[0].(string)),
+			}
+			for _, p := range path[1:] {
+				sel = &ast.SelectorExpr{
+					X:   sel,
+					Sel: newIdent(p.(string)),
+				}
+			}
+			return sel
+		})(input)
+}
+
+var Selector *selector
+
 func StatementList() ParserFunc {
 	return ZeroOrMore(WhitespaceWrap(CallExpr))
 }
