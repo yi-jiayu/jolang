@@ -3,13 +3,13 @@
 build:
 	cd cmd/joc && go build -o ../../bin/joc
 
-output/%.go: tests/%.jo
+output/%.go: examples/%.jo
 	@echo $<
 	@./jo build $< > $@
 	@diff -u $(basename $<).go $@
 	@rm $@
 
-test: clean build output $(patsubst tests/%.go,output/%.go,$(wildcard tests/*.go))
+test: clean build output $(patsubst examples/%.go,output/%.go,$(wildcard examples/*.go))
 
 output:
 	@mkdir -p output
