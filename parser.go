@@ -226,6 +226,7 @@ func ZeroOrMore(p Parser) ParserFunc {
 	}
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func Optional(p Parser) ParserFunc {
 	return func(input Source) (remaining Source, matched interface{}, err error) {
 		remaining = input
@@ -610,13 +611,14 @@ func (*statementList) Parse(input Source) (remaining Source, matched interface{}
 	return Map(
 		ZeroOrMore(WhitespaceWrap(Statement)),
 		func(matched interface{}) interface{} {
-			var stmts []ast.Stmt
-			for _, m := range matched.([]interface{}) {
+			matches := matched.([]interface{})
+			stmts := make([]ast.Stmt, len(matches))
+			for i, m := range matches {
 				switch v := m.(type) {
 				case ast.Expr:
-					stmts = append(stmts, &ast.ExprStmt{X: v})
+					stmts[i] = &ast.ExprStmt{X: v}
 				case ast.Stmt:
-					stmts = append(stmts, v)
+					stmts[i] = v
 				}
 			}
 			return stmts
@@ -630,15 +632,11 @@ var Statement = Choice(IfStmt, CallExpr)
 
 var DoExpr = Map(Parenthesized(Right(
 	Literal("do"),
-	Optional(Right(OneOrMoreWhitespaceChars(),
-		StatementList)))),
+	StatementList)),
 	func(matched interface{}) interface{} {
-		if matched == nil {
-			return &ast.BlockStmt{
-				List: []ast.Stmt{},
-			}
+		return &ast.BlockStmt{
+			List: matched.([]ast.Stmt),
 		}
-		return nil
 	},
 )
 

@@ -1,0 +1,8 @@
+(package main)
+
+(import "fmt" "math/rand" "time")
+
+(func main ()
+    (rand.Seed (sel time (Now) (Unix)))
+    (if (< (rand.Float32) 0.5)
+        (do (fmt.Println "heads") (fmt.Println "not tails"))))
