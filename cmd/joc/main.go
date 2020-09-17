@@ -1,7 +1,7 @@
 package main
 
 import (
-	"go/printer"
+	"go/format"
 	"go/token"
 	"io/ioutil"
 	"os"
@@ -18,5 +18,5 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	printer.Fprint(os.Stdout, token.NewFileSet(), ast)
+	format.Node(os.Stdout, token.NewFileSet(), ast)
 }
