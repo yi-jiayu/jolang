@@ -733,3 +733,14 @@ func Test_statementList_Parse(t *testing.T) {
 	}, matched)
 	assert.NoError(t, err)
 }
+
+func TestShortVarDecl(t *testing.T) {
+	parse := stringParser(ShortVarDecl)
+	_, matched, err := parse(`(set x 1)`)
+	assert.Equal(t, &ast.AssignStmt{
+		Lhs: []ast.Expr{newIdent("x")},
+		Tok: token.DEFINE,
+		Rhs: []ast.Expr{intLit(1)},
+	}, matched)
+	assert.NoError(t, err)
+}

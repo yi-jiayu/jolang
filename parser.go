@@ -628,7 +628,7 @@ func (*statementList) Parse(input Source) (remaining Source, matched interface{}
 
 var StatementList *statementList
 
-var Statement = Choice(IfStmt, CallExpr)
+var Statement = Choice(ShortVarDecl, IfStmt, CallExpr)
 
 var DoExpr = Map(Parenthesized(Right(
 	Literal("do"),
@@ -732,6 +732,19 @@ var IfStmt = Map(Parenthesized(Right(
 		}
 	})
 
+var ShortVarDecl = Map(Parenthesized(Right(
+	Literal("set"), Pair(Right(OneOrMoreWhitespaceChars(),
+		Ident), Right(OneOrMoreWhitespaceChars(),
+		Expr)))),
+	func(matched interface{}) interface{} {
+		pair := matched.(MatchedPair)
+		return &ast.AssignStmt{
+			Lhs: []ast.Expr{pair.Left.(*ast.Ident)},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{pair.Right.(ast.Expr)},
+		}
+	},
+)
 var SourceFile = Map(
 	Sequence(
 		WhitespaceWrap(PackageClause()),

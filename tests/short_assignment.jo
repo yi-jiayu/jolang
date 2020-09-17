@@ -1,0 +1,7 @@
+(package main)
+
+(import "fmt")
+
+(func main ()
+    (set x 1)
+    (fmt.Println x))
