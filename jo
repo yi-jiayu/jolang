@@ -1,0 +1,35 @@
+#!/bin/sh -
+
+help() {
+	echo "usage:"
+	echo "    $0 build <file>"
+	echo "    $0 run <file>"
+	exit 1
+}
+
+case $1 in
+	run)
+		command=run
+		;;
+	build)
+		command=build
+		;;
+	*)
+		help
+esac
+
+shift
+
+if [ -z "$1" ]; then
+	help
+fi
+
+case $command in
+	run)
+		bin/joc < $1 > $1~.go && go run $1~.go
+		rm $1~.go
+		;;
+	build)
+		bin/joc < $1	
+		;;
+esac
