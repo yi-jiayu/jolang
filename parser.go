@@ -393,7 +393,7 @@ func Parenthesized(p Parser) ParserFunc {
 }
 
 func PackageClause() ParserFunc {
-	return Parenthesized(Right(Literal("package"), Right(OneOrMoreWhitespaceChars(), Ident)))
+	return Parenthesized(Right(Literal(token.PACKAGE.String()), Right(OneOrMoreWhitespaceChars(), Ident)))
 }
 
 func MapConst(p Parser, v interface{}) Parser {
@@ -508,7 +508,7 @@ type structType struct{}
 func (*structType) Parse(input Source) (remaining Source, matched interface{}, err error) {
 	return Map(Parenthesized(
 		Right(
-			Literal("struct"),
+			Literal(token.STRUCT.String()),
 			ZeroOrMore(
 				Right(
 					ZeroOrMoreWhitespaceChars(),
@@ -539,7 +539,7 @@ type typeDecl struct{}
 
 func (*typeDecl) Parse(input Source) (remaining Source, matched interface{}, err error) {
 	return Map(Parenthesized(Right(
-		Literal("type"), Right(OneOrMoreWhitespaceChars(),
+		Literal(token.TYPE.String()), Right(OneOrMoreWhitespaceChars(),
 			Pair(Ident, Right(OneOrMoreWhitespaceChars(),
 				StructType))))),
 		func(matched interface{}) interface{} {
@@ -569,7 +569,7 @@ func Noop() ParserFunc {
 	}
 }
 
-var FunctionDecl = Map(Parenthesized(Right(Literal("func"), Right(OneOrMoreWhitespaceChars(), Pair(Ident, Right(Right(OneOrMoreWhitespaceChars(), Parenthesized(Noop())), WhitespaceWrap(StatementList())))))),
+var FunctionDecl = Map(Parenthesized(Right(Literal(token.FUNC.String()), Right(OneOrMoreWhitespaceChars(), Pair(Ident, Right(Right(OneOrMoreWhitespaceChars(), Parenthesized(Noop())), WhitespaceWrap(StatementList())))))),
 	func(matched interface{}) interface{} {
 		pair := matched.(MatchedPair)
 		name := pair.Left.(*ast.Ident)
@@ -590,7 +590,7 @@ var FunctionDecl = Map(Parenthesized(Right(Literal("func"), Right(OneOrMoreWhite
 var TopLevelDecl = Choice(TypeDecl, FunctionDecl)
 
 var ImportDecl = Map(
-	Parenthesized(Right(Literal("import"), OneOrMore(Right(OneOrMoreWhitespaceChars(), stringLit())))),
+	Parenthesized(Right(Literal(token.IMPORT.String()), OneOrMore(Right(OneOrMoreWhitespaceChars(), stringLit())))),
 	func(matched interface{}) interface{} {
 		matches := matched.([]interface{})
 		var specs []ast.Spec
