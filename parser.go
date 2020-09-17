@@ -390,6 +390,35 @@ func decimalLit() ParserFunc {
 	})
 }
 
+var escapedChar = Choice(
+	Literal(`\a`),
+	Literal(`\b`),
+	Literal(`\f`),
+	Literal(`\n`),
+	Literal(`\r`),
+	Literal(`\t`),
+	Literal(`\v`),
+	Literal(`\\`),
+	Literal(`\'`),
+	Literal(`\"`),
+)
+
+var RuneLit = Map(
+	Right(Rune('\''), Left(Choice(escapedChar, AnyChar), Rune('\''))),
+	func(matched interface{}) interface{} {
+		var value string
+		switch v := matched.(type) {
+		case string:
+			value = v
+		case rune:
+			value = string(v)
+		}
+		return &ast.BasicLit{
+			Kind:  token.CHAR,
+			Value: `'` + value + `'`,
+		}
+	})
+
 func stringLit() ParserFunc {
 	return Map(QuotedString(), func(matched interface{}) interface{} {
 		return &ast.BasicLit{
@@ -400,7 +429,7 @@ func stringLit() ParserFunc {
 }
 
 func basicLit() ParserFunc {
-	return Choice(decimalFloatLit, decimalLit(), stringLit())
+	return Choice(decimalFloatLit, decimalLit(), RuneLit, stringLit())
 }
 
 func Rune(r rune) ParserFunc {
@@ -470,6 +499,18 @@ func (*binaryExpr) Parse(input Source) (remaining Source, matched interface{}, e
 
 var BinaryExpr *binaryExpr
 
+var UnaryOp = Choice(
+	MapConst(Rune('&'), token.AND),
+)
+
+var UnaryExpr = Map(Pair(UnaryOp, Expr), func(matched interface{}) interface{} {
+	pair := matched.(MatchedPair)
+	return &ast.UnaryExpr{
+		Op: pair.Left.(token.Token),
+		X:  pair.Right.(ast.Expr),
+	}
+})
+
 type callExpr struct{}
 
 func (*callExpr) Parse(input Source) (remaining Source, matched interface{}, err error) {
@@ -493,7 +534,7 @@ var CallExpr *callExpr
 type expr struct{}
 
 func (*expr) Parse(input Source) (remaining Source, matched interface{}, err error) {
-	return Choice(basicLit(), BinaryExpr, Selector, CallExpr, OperandName)(input)
+	return Choice(basicLit(), BinaryExpr, UnaryExpr, Selector, CallExpr, OperandName)(input)
 }
 
 var Expr *expr
@@ -628,7 +669,7 @@ func (*statementList) Parse(input Source) (remaining Source, matched interface{}
 
 var StatementList *statementList
 
-var Statement = Choice(ShortVarDecl, IfStmt, CallExpr)
+var Statement = Choice(DeclStmt, Define, IfStmt, CallExpr)
 
 var DoExpr = Map(Parenthesized(Right(
 	Literal("do"),
@@ -750,7 +791,7 @@ var ExpressionList = Map(OneOrMore(WhitespaceWrap(Expr)), func(matched interface
 	return exprs
 })
 
-var ShortVarDecl = Map(Parenthesized(Right(
+var Define = Map(Parenthesized(Right(
 	Literal("define"), Pair(Right(OneOrMoreWhitespaceChars(),
 		Choice(Ident, Parenthesized(IdentifierList))), Right(OneOrMoreWhitespaceChars(),
 		Choice(Expr, Parenthesized(ExpressionList)))))),
@@ -777,6 +818,30 @@ var ShortVarDecl = Map(Parenthesized(Right(
 		}
 	},
 )
+
+func Keyword(k string) Parser {
+	return Pred(Identifier, func(matched interface{}) bool {
+		return matched.(string) == k
+	})
+}
+
+var DeclStmt = Map(
+	Parenthesized(Right(Keyword("var"), Pair(WhitespaceWrap(Ident), WhitespaceWrap(Ident)))),
+	func(matched interface{}) interface{} {
+		pair := matched.(MatchedPair)
+		return &ast.DeclStmt{
+			Decl: &ast.GenDecl{
+				Tok: token.VAR,
+				Specs: []ast.Spec{
+					&ast.ValueSpec{
+						Names: []*ast.Ident{pair.Left.(*ast.Ident)},
+						Type:  pair.Right.(*ast.Ident),
+					},
+				},
+			},
+		}
+	})
+
 var SourceFile = Map(
 	Sequence(
 		WhitespaceWrap(PackageClause()),

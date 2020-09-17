@@ -1,0 +1,11 @@
+(package main)
+
+(import "bufio" "fmt" "os")
+
+(func main ()
+    (define r (bufio.NewReader os.Stdin))
+    (fmt.Print "Your guess: ")
+    (define (text _) (r.ReadString '\n'))
+    (var guess int)
+    (fmt.Sscan text &guess)
+    (fmt.Printf "You guessed %d!\n" guess))

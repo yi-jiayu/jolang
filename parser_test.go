@@ -53,6 +53,11 @@ func Test_Identifier(t *testing.T) {
 		_, _, err := parse("!not at all an identifier")
 		assert.Equal(t, &ParseError{Offset: 0, Message: "wanted identifier, got '!'"}, err)
 	}
+	t.Run("blank identifier", func(t *testing.T) {
+		_, matched, err := parse("_")
+		assert.Equal(t, "_", matched)
+		assert.NoError(t, err)
+	})
 }
 
 func Test_Pair(t *testing.T) {
@@ -450,7 +455,7 @@ func TestQualifiedIdent(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func Test_identifier(t *testing.T) {
+func TestOperandName(t *testing.T) {
 	parse := stringParser(OperandName)
 	t.Run("unqualified", func(t *testing.T) {
 		_, matched, err := parse("println")
@@ -745,8 +750,8 @@ func TestIdentifierList(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestShortVarDecl(t *testing.T) {
-	parse := stringParser(ShortVarDecl)
+func TestDefine(t *testing.T) {
+	parse := stringParser(Define)
 	t.Run("single variable", func(t *testing.T) {
 		_, matched, err := parse(`(define x 1)`)
 		assert.Equal(t, &ast.AssignStmt{
@@ -762,6 +767,81 @@ func TestShortVarDecl(t *testing.T) {
 			Lhs: []ast.Expr{newIdent("x"), newIdent("y")},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{intLit(1), intLit(2)},
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("function call", func(t *testing.T) {
+		_, matched, err := parse(`(define (text _) (r.ReadString '\n'))`)
+		assert.Equal(t, &ast.AssignStmt{
+			Lhs: []ast.Expr{newIdent("text"), newIdent("_")},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{
+				&ast.CallExpr{
+					Fun: newSelectorExpr("r", "ReadString"),
+					Args: []ast.Expr{
+						&ast.BasicLit{
+							Kind:  token.CHAR,
+							Value: `'\n'`,
+						},
+					},
+				},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
+}
+
+func TestUnaryExpr(t *testing.T) {
+	parse := stringParser(UnaryExpr)
+	t.Run("single", func(t *testing.T) {
+		_, matched, err := parse(`&x`)
+		assert.Equal(t, &ast.UnaryExpr{
+			Op: token.AND,
+			X:  newIdent("x"),
+		}, matched)
+		assert.NoError(t, err)
+	})
+}
+
+func TestDeclStmt(t *testing.T) {
+	parse := stringParser(DeclStmt)
+	_, matched, err := parse(`(var x int)`)
+	assert.Equal(t, &ast.DeclStmt{
+		Decl: &ast.GenDecl{
+			Tok: token.VAR,
+			Specs: []ast.Spec{
+				&ast.ValueSpec{
+					Names: []*ast.Ident{newIdent("x")},
+					Type:  newIdent("int"),
+				},
+			},
+		},
+	}, matched)
+	assert.NoError(t, err)
+}
+
+func Test_escapedChar(t *testing.T) {
+	parse := stringParser(escapedChar)
+	_, matched, err := parse(`\a`)
+	assert.Equal(t, `\a`, matched)
+	assert.NoError(t, err)
+}
+
+func TestRuneLit(t *testing.T) {
+	parse := stringParser(RuneLit)
+	t.Run("escaped char", func(t *testing.T) {
+		_, matched, err := parse(`'\n'`)
+		assert.Equal(t, &ast.BasicLit{
+			Kind:  token.CHAR,
+			Value: "'\\n'",
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("unicode value", func(t *testing.T) {
+		_, matched, err := parse(`'c'`)
+		assert.Equal(t, &ast.BasicLit{
+			Kind:  token.CHAR,
+			Value: "'c'",
 		}, matched)
 		assert.NoError(t, err)
 	})
