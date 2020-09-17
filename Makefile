@@ -1,6 +1,6 @@
-.PHONY: clean
+.PHONY: build clean test
 
-bin/joc: cmd/joc/main.go
+build:
 	cd cmd/joc && go build -o ../../bin/joc
 
 output/%.go: tests/%.jo
@@ -9,10 +9,10 @@ output/%.go: tests/%.jo
 	@diff -u $(basename $<).go $@
 	@rm $@
 
-test: output $(patsubst tests/%.go,output/%.go,$(wildcard tests/*.go))
+test: clean build output $(patsubst tests/%.go,output/%.go,$(wildcard tests/*.go))
 
 output:
-	mkdir -p output
+	@mkdir -p output
 
 clean:
-	rm -rf output
+	@rm -rf output
