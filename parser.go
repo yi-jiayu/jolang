@@ -398,16 +398,21 @@ func (*expr) Parse(input string) (remaining string, matched interface{}, err err
 
 var Expr *expr
 
-func newIdent(v string) *ast.Ident {
-	return &ast.Ident{
-		Name: v,
-	}
+type selectorCall struct {
+	Sel  *ast.Ident
+	Args []ast.Expr
 }
 
-type selectorCall *ast.Ident
-
-var SelectorCall = Map(Right(Rune('.'), Ident), func(matched interface{}) interface{} {
-	return selectorCall(matched.(*ast.Ident))
+var SelectorCall = Map(Parenthesized(Pair(Ident, ZeroOrMore(Right(OneOrMoreWhitespaceChars(), Expr)))), func(matched interface{}) interface{} {
+	match := matched.(MatchedPair)
+	var args []ast.Expr
+	for _, e := range match.Right.([]interface{}) {
+		args = append(args, e.(ast.Expr))
+	}
+	return selectorCall{
+		Sel:  match.Left.(*ast.Ident),
+		Args: args,
+	}
 })
 
 type selector struct{}
@@ -433,8 +438,9 @@ func (*selector) Parse(input string) (remaining string, matched interface{}, err
 					expr = &ast.CallExpr{
 						Fun: &ast.SelectorExpr{
 							X:   expr,
-							Sel: x,
+							Sel: x.Sel,
 						},
+						Args: x.Args,
 					}
 				}
 			}

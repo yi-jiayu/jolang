@@ -44,11 +44,28 @@ func main() {
 										Fun: &ast.SelectorExpr{
 											X: &ast.CallExpr{
 												Fun: &ast.SelectorExpr{
-													X: &ast.Ident{
-														Name: "time",
+													X: &ast.CallExpr{
+														Fun: &ast.SelectorExpr{
+															X: &ast.Ident{
+																Name: "time",
+															},
+															Sel: &ast.Ident{
+																Name: "Now",
+															},
+														},
 													},
 													Sel: &ast.Ident{
-														Name: "Now",
+														Name: "Add",
+													},
+												},
+												Args: []ast.Expr{
+													&ast.SelectorExpr{
+														X: &ast.Ident{
+															Name: "time",
+														},
+														Sel: &ast.Ident{
+															Name: "Second",
+														},
 													},
 												},
 											},

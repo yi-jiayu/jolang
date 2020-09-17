@@ -493,8 +493,8 @@ func Test_selector_Parse(t *testing.T) {
 		}, matched)
 		assert.NoError(t, err)
 	})
-	t.Run("function call", func(t *testing.T) {
-		_, matched, err := Selector.Parse(`(sel time .Now .Unix)`)
+	t.Run("function calls", func(t *testing.T) {
+		_, matched, err := Selector.Parse(`(sel time (Now) (Add time.Second))`)
 		assert.Equal(t, &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X: &ast.CallExpr{
@@ -503,13 +503,14 @@ func Test_selector_Parse(t *testing.T) {
 						Sel: newIdent("Now"),
 					},
 				},
-				Sel: newIdent("Unix"),
+				Sel: newIdent("Add"),
 			},
+			Args: []ast.Expr{newSelectorExpr("time", "Second")},
 		}, matched)
 		assert.NoError(t, err)
 	})
 	t.Run("sel on expr", func(t *testing.T) {
-		_, matched, err := Selector.Parse(`(sel (now) .Unix)`)
+		_, matched, err := Selector.Parse(`(sel (now) (Unix))`)
 		assert.Equal(t, &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X: &ast.CallExpr{
@@ -566,15 +567,6 @@ func Test_typeDecl_Parse(t *testing.T) {
 				},
 			},
 		}, matched)
-		assert.NoError(t, err)
-	})
-}
-
-func Test_expr_Parse(t *testing.T) {
-	t.Run("Selector", func(t *testing.T) {
-		_, expected, _ := Selector.Parse(`(sel time .Now .Unix)`)
-		_, matched, err := Expr.Parse(`(sel time .Now .Unix)`)
-		assert.Equal(t, expected, matched)
 		assert.NoError(t, err)
 	})
 }

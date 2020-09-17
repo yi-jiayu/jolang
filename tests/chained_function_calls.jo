@@ -2,4 +2,4 @@
 
 (import "time")
 
-(func main () (println (sel time .Now .Unix)))
+(func main () (println (sel time (Now) (Add time.Second) (Unix))))
