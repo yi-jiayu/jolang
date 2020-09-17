@@ -650,6 +650,41 @@ func TestIfStmt(t *testing.T) {
 		}, matched)
 		assert.NoError(t, err)
 	})
+	t.Run("else block", func(t *testing.T) {
+		_, matched, err := parse(`(if true (println "true") (println "false"))`)
+		assert.Equal(t, &ast.IfStmt{
+			Cond: newIdent("true"),
+			Body: &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.ExprStmt{X: newCallExpr("println", strLit(`"true"`))},
+				},
+			},
+			Else: &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.ExprStmt{X: newCallExpr("println", strLit(`"false"`))},
+				},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("else block with do", func(t *testing.T) {
+		_, matched, err := parse(`(if true (println "true") (do (println "false") (println "false")))`)
+		assert.Equal(t, &ast.IfStmt{
+			Cond: newIdent("true"),
+			Body: &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.ExprStmt{X: newCallExpr("println", strLit(`"true"`))},
+				},
+			},
+			Else: &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.ExprStmt{X: newCallExpr("println", strLit(`"false"`))},
+					&ast.ExprStmt{X: newCallExpr("println", strLit(`"false"`))},
+				},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
 }
 
 func TestDoExpr(t *testing.T) {

@@ -695,13 +695,14 @@ var QualifiedIdent = Map(
 
 var IfStmt = Map(Parenthesized(Right(
 	Literal(token.IF.String()), Pair(Right(ZeroOrMoreWhitespaceChars(),
-		Expr), Right(ZeroOrMoreWhitespaceChars(),
-		Choice(DoExpr, Expr))))),
+		Expr), Pair(
+		WhitespaceWrap(Choice(DoExpr, Expr)),
+		Optional(WhitespaceWrap(Choice(DoExpr, Expr))))))),
 	func(matched interface{}) interface{} {
 		pair := matched.(MatchedPair)
-		cond := pair.Left.(ast.Expr)
+		cond, arms := pair.Left.(ast.Expr), pair.Right.(MatchedPair)
 		var body *ast.BlockStmt
-		switch v := pair.Right.(type) {
+		switch v := arms.Left.(type) {
 		case *ast.BlockStmt:
 			body = v
 		case ast.Expr:
@@ -711,9 +712,23 @@ var IfStmt = Map(Parenthesized(Right(
 				},
 			}
 		}
+		var Else ast.Stmt
+		if e := arms.Right; e != nil {
+			switch v := e.(type) {
+			case *ast.BlockStmt:
+				Else = v
+			case ast.Expr:
+				Else = &ast.BlockStmt{
+					List: []ast.Stmt{
+						&ast.ExprStmt{X: v},
+					},
+				}
+			}
+		}
 		return &ast.IfStmt{
 			Cond: cond,
 			Body: body,
+			Else: Else,
 		}
 	})
 
