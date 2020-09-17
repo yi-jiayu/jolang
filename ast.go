@@ -5,7 +5,7 @@ import (
 )
 
 func Parse(input string) (*ast.File, error) {
-	_, node, err := SourceFile(input)
+	_, node, err := SourceFile(NewSource(input))
 	if err != nil {
 		return nil, err
 	}

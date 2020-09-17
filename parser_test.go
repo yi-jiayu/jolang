@@ -9,163 +9,170 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func stringParser(p Parser) func(input string) (remaining Source, matched interface{}, err error) {
+	return func(input string) (remaining Source, matched interface{}, err error) {
+		return p.Parse(NewSource(input))
+	}
+}
+
 func Test_Literal(t *testing.T) {
-	parseJoe := Literal("Hello Joe!")
+	parseJoe := stringParser(Literal("Hello Joe!"))
 	{
 		remaining, matched, err := parseJoe("Hello Joe!")
-		assert.Empty(t, remaining)
+		assert.Equal(t, Source{Offset: 10}, remaining)
 		assert.Equal(t, "Hello Joe!", matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := parseJoe("Hello Joe! Hello Robert!")
-		assert.Equal(t, " Hello Robert!", remaining)
+		assert.Equal(t, Source{Content: " Hello Robert!", Offset: 10}, remaining)
 		assert.Equal(t, "Hello Joe!", matched)
 		assert.NoError(t, err)
 	}
 	{
 		_, _, err := parseJoe("Hello Mike!")
-		assert.EqualError(t, err, "wanted a literal \"Hello Joe!\", got: \"Hello Mike!\"")
+		assert.Equal(t, &ParseError{Offset: 0, Message: "wanted a literal \"Hello Joe!\", got: \"H\""}, err)
 	}
 }
 
 func Test_Identifier(t *testing.T) {
+	parse := stringParser(Identifier)
 	{
-		remaining, matched, err := Identifier("i_am_an_identifier")
-		assert.Empty(t, remaining)
+		remaining, matched, err := parse("i_am_an_identifier")
+		assert.Equal(t, Source{Offset: 18}, remaining)
 		assert.Equal(t, "i_am_an_identifier", matched)
 		assert.NoError(t, err)
 	}
 	{
-		remaining, matched, err := Identifier("not entirely an identifier")
-		assert.Equal(t, " entirely an identifier", remaining)
+		remaining, matched, err := parse("not entirely an identifier")
+		assert.Equal(t, Source{Content: " entirely an identifier", Offset: 3}, remaining)
 		assert.Equal(t, "not", matched)
 		assert.NoError(t, err)
 	}
 	{
-		_, _, err := Identifier("!not at all an identifier")
-		assert.EqualError(t, err, "!not at all an identifier")
+		_, _, err := parse("!not at all an identifier")
+		assert.Equal(t, &ParseError{Offset: 0, Message: "wanted identifier, got '!'"}, err)
 	}
 }
 
 func Test_Pair(t *testing.T) {
-	tagOpener := Pair(Literal("<"), Identifier)
+	tagOpener := stringParser(Pair(Literal("<"), Identifier))
 	{
 		remaining, matched, err := tagOpener("<element/>")
-		assert.Equal(t, "/>", remaining)
+		assert.Equal(t, Source{Content: "/>", Offset: 8}, remaining)
 		assert.Equal(t, MatchedPair{Left: "<", Right: "element"}, matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, _, err := tagOpener("oops")
-		assert.Equal(t, "oops", remaining)
-		assert.EqualError(t, err, "wanted a literal \"<\", got: \"oops\"")
+		assert.Equal(t, Source{Content: "oops", Offset: 0}, remaining)
+		assert.Equal(t, &ParseError{Offset: 0, Message: `wanted a literal "<", got: "o"`}, err)
 	}
 	{
 		remaining, _, err := tagOpener("<!oops")
-		assert.Equal(t, "<!oops", remaining)
-		assert.EqualError(t, err, "!oops")
+		assert.Equal(t, Source{Content: "<!oops", Offset: 0}, remaining)
+		assert.Equal(t, &ParseError{Offset: 1, Message: "wanted identifier, got '!'"}, err)
 	}
 }
 
 func Test_Right(t *testing.T) {
-	tagOpener := Right(Literal("<"), Identifier)
+	tagOpener := stringParser(Right(Literal("<"), Identifier))
 	{
 		remaining, matched, err := tagOpener("<element/>")
-		assert.Equal(t, "/>", remaining)
+		assert.Equal(t, Source{Content: "/>", Offset: 8}, remaining)
 		assert.Equal(t, "element", matched)
 		assert.NoError(t, err)
 	}
 }
 
 func Test_OneOrMore(t *testing.T) {
-	p := OneOrMore(Literal("ha"))
+	p := stringParser(OneOrMore(Literal("ha")))
 	{
 		remaining, matched, err := p("hahaha")
-		assert.Empty(t, remaining)
+		assert.Equal(t, Source{Offset: 6}, remaining)
 		assert.Equal(t, []interface{}{"ha", "ha", "ha"}, matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := p("hahaha ahah")
-		assert.Equal(t, " ahah", remaining)
+		assert.Equal(t, Source{Content: " ahah", Offset: 6}, remaining)
 		assert.Equal(t, []interface{}{"ha", "ha", "ha"}, matched)
 		assert.NoError(t, err)
 	}
 	{
 		_, _, err := p("ahah")
-		assert.EqualError(t, err, "wanted a literal \"ha\", got: \"ahah\"")
+		assert.Equal(t, &ParseError{Offset: 0, Message: `wanted a literal "ha", got: "a"`}, err)
 	}
 	{
 		_, _, err := p("")
-		assert.EqualError(t, err, "wanted a literal \"ha\", got: \"\"")
+		assert.Equal(t, &ParseError{Offset: 0, Message: "wanted a literal \"ha\", got: \"\""}, err)
 	}
 }
 
 func Test_ZeroOrMore(t *testing.T) {
-	p := ZeroOrMore(Literal("ha"))
+	p := stringParser(ZeroOrMore(Literal("ha")))
 	{
 		remaining, matched, err := p("hahaha")
-		assert.Empty(t, remaining)
+		assert.Equal(t, Source{Offset: 6}, remaining)
 		assert.Equal(t, []interface{}{"ha", "ha", "ha"}, matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := p("ahah")
-		assert.Equal(t, "ahah", remaining)
+		assert.Equal(t, Source{Content: "ahah"}, remaining)
 		assert.Empty(t, matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := p("")
-		assert.Equal(t, "", remaining)
+		assert.Equal(t, Source{}, remaining)
 		assert.Empty(t, matched)
 		assert.NoError(t, err)
 	}
 }
 
 func Test_Pred(t *testing.T) {
-	p := Pred(AnyChar, func(matched interface{}) bool {
+	p := stringParser(Pred(AnyChar, func(matched interface{}) bool {
 		return matched == 'o'
-	})
+	}))
 	{
 		remaining, matched, err := p("omg")
-		assert.Equal(t, "mg", remaining)
+		assert.Equal(t, Source{Content: "mg", Offset: 1}, remaining)
 		assert.Equal(t, 'o', matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, _, err := p("lol")
-		assert.Equal(t, "lol", remaining)
-		assert.EqualError(t, err, "lol")
+		assert.Equal(t, Source{Content: "lol"}, remaining)
+		assert.Equal(t, &ParseError{Message: "predicate failed"}, err)
 	}
 }
 
 func Test_QuotedString(t *testing.T) {
-	p := QuotedString()
+	p := stringParser(QuotedString())
 	remaining, matched, err := p(`"Hello Joe!"`)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, Source{Offset: 12}, remaining)
 	assert.Equal(t, "Hello Joe!", matched)
 	assert.NoError(t, err)
 }
 
 func Test_Choice(t *testing.T) {
-	p := Choice(Literal("package"), Literal("func"))
+	p := stringParser(Choice(Literal("package"), Literal("func")))
 	{
 		remaining, matched, err := p("package main")
-		assert.Equal(t, " main", remaining)
+		assert.Equal(t, Source{Content: " main", Offset: 7}, remaining)
 		assert.Equal(t, "package", matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := p("func main")
-		assert.Equal(t, " main", remaining)
+		assert.Equal(t, Source{Content: " main", Offset: 4}, remaining)
 		assert.Equal(t, "func", matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, _, err := p("import \"fmt\"")
-		assert.Equal(t, `import "fmt"`, remaining)
+		assert.Equal(t, Source{Content: "import \"fmt\""}, remaining)
 		assert.Error(t, err)
 	}
 }
@@ -178,25 +185,25 @@ func strLit(v string) *ast.BasicLit {
 }
 
 func Test_decimalLit(t *testing.T) {
-	p := decimalLit()
+	p := stringParser(decimalLit())
 	{
 		remaining, matched, err := p("0 aoeu")
-		assert.Equal(t, " aoeu", remaining)
+		assert.Equal(t, Source{Content: " aoeu", Offset: 1}, remaining)
 		assert.Equal(t, &ast.BasicLit{Kind: token.INT, Value: "0"}, matched)
 		assert.NoError(t, err)
 	}
 	{
 		remaining, matched, err := p("12340 aoeu")
-		assert.Equal(t, " aoeu", remaining)
+		assert.Equal(t, Source{Content: " aoeu", Offset: 5}, remaining)
 		assert.Equal(t, &ast.BasicLit{Kind: token.INT, Value: "12340"}, matched)
 		assert.NoError(t, err)
 	}
 }
 
 func Test_stringLit(t *testing.T) {
-	p := stringLit()
+	p := stringParser(stringLit())
 	remaining, matched, err := p(`"Hello, World"`)
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, Source{Offset: 14}, remaining)
 	assert.Equal(t, &ast.BasicLit{Kind: token.STRING, Value: "\"Hello, World\""}, matched)
 	assert.NoError(t, err)
 }
@@ -206,7 +213,7 @@ func TestSourceFile(t *testing.T) {
 		const input = `(package main)
 
 (func main () (println "Hello, World"))`
-		_, matched, err := SourceFile(input)
+		_, matched, err := SourceFile(NewSource(input))
 		assert.Equal(t, &ast.File{
 			Name: &ast.Ident{
 				Name: "main",
@@ -247,7 +254,7 @@ func TestSourceFile(t *testing.T) {
 (import "fmt")
 
 (func main () (fmt.Println 1))`
-		_, matched, err := SourceFile(input)
+		_, matched, err := SourceFile(NewSource(input))
 		assert.Equal(t, &ast.File{
 			Name: &ast.Ident{
 				Name: "main",
@@ -297,16 +304,17 @@ func TestSourceFile(t *testing.T) {
 }
 
 func TestSExpr(t *testing.T) {
-	p := Parenthesized(OneOrMore(WhitespaceWrap(Identifier)))
+	p := stringParser(Parenthesized(OneOrMore(WhitespaceWrap(Identifier))))
 	remaining, matched, err := p("(hello world)")
-	assert.Equal(t, "", remaining)
+	assert.Equal(t, Source{Offset: 13}, remaining)
 	assert.Equal(t, []interface{}{"hello", "world"}, matched)
 	assert.NoError(t, err)
 }
 
 func Test_callExpr_Parse(t *testing.T) {
+	parse := stringParser(CallExpr)
 	t.Run("literal arguments", func(t *testing.T) {
-		_, matched, err := CallExpr.Parse(`(println "Hello, World")`)
+		_, matched, err := parse(`(println "Hello, World")`)
 		assert.Equal(t, &ast.CallExpr{
 			Fun:  newIdent("println"),
 			Args: []ast.Expr{strLit(`"Hello, World"`)},
@@ -314,14 +322,14 @@ func Test_callExpr_Parse(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("no arguments", func(t *testing.T) {
-		_, matched, err := CallExpr.Parse(`(f)`)
+		_, matched, err := parse(`(f)`)
 		assert.Equal(t, &ast.CallExpr{
 			Fun: newIdent("f"),
 		}, matched)
 		assert.NoError(t, err)
 	})
 	t.Run("nested call expressions", func(t *testing.T) {
-		_, matched, err := CallExpr.Parse(`(println "Hello" (fmt.Sprint "World"))`)
+		_, matched, err := parse(`(println "Hello" (fmt.Sprint "World"))`)
 		assert.Equal(t, &ast.CallExpr{
 			Fun: newIdent("println"),
 			Args: []ast.Expr{
@@ -349,7 +357,8 @@ func Test_callExpr_Parse(t *testing.T) {
 }
 
 func TestFunctionDecl(t *testing.T) {
-	_, matched, err := FunctionDecl(`(func main () (println "Hello, World"))`)
+	parse := stringParser(FunctionDecl)
+	_, matched, err := parse(`(func main () (println "Hello, World"))`)
 	assert.Equal(t, &ast.FuncDecl{
 		Name: &ast.Ident{
 			Name: "main",
@@ -380,16 +389,17 @@ func TestFunctionDecl(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
-	p := Sequence(Literal("hello"), Literal(" "), Literal("world"))
+	p := stringParser(Sequence(Literal("hello"), Literal(" "), Literal("world")))
 	remaining, matched, err := p("hello world!")
-	assert.Equal(t, "!", remaining)
+	assert.Equal(t, Source{Content: "!", Offset: 11}, remaining)
 	assert.Equal(t, []interface{}{"hello", " ", "world"}, matched)
 	assert.NoError(t, err)
 }
 
 func TestImportDecl(t *testing.T) {
+	parse := stringParser(ImportDecl)
 	t.Run("single import", func(t *testing.T) {
-		_, matched, err := ImportDecl(`(import "fmt")`)
+		_, matched, err := parse(`(import "fmt")`)
 		assert.Equal(t, &ast.GenDecl{
 			Tok: token.IMPORT,
 			Specs: []ast.Spec{
@@ -404,7 +414,7 @@ func TestImportDecl(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("grouped import", func(t *testing.T) {
-		_, matched, err := ImportDecl(`(import "fmt" "log")`)
+		_, matched, err := parse(`(import "fmt" "log")`)
 		assert.Equal(t, &ast.GenDecl{
 			Tok: token.IMPORT,
 			Specs: []ast.Spec{
@@ -427,7 +437,8 @@ func TestImportDecl(t *testing.T) {
 }
 
 func TestQualifiedIdent(t *testing.T) {
-	_, matched, err := QualifiedIdent("fmt.Println")
+	parse := stringParser(QualifiedIdent)
+	_, matched, err := parse("fmt.Println")
 	assert.Equal(t, &ast.SelectorExpr{
 		X: &ast.Ident{
 			Name: "fmt",
@@ -440,13 +451,14 @@ func TestQualifiedIdent(t *testing.T) {
 }
 
 func Test_identifier(t *testing.T) {
+	parse := stringParser(OperandName)
 	t.Run("unqualified", func(t *testing.T) {
-		_, matched, err := OperandName("println")
+		_, matched, err := parse("println")
 		assert.Equal(t, newIdent("println"), matched)
 		assert.NoError(t, err)
 	})
 	t.Run("qualified indentifier", func(t *testing.T) {
-		_, matched, err := OperandName("fmt.Println")
+		_, matched, err := parse("fmt.Println")
 		assert.Equal(t, &ast.SelectorExpr{
 			X: &ast.Ident{
 				Name: "fmt",
@@ -467,8 +479,9 @@ func intLit(v int) *ast.BasicLit {
 }
 
 func Test_binaryExpr_Parse(t *testing.T) {
+	parse := stringParser(BinaryExpr)
 	t.Run("single", func(t *testing.T) {
-		_, matched, err := BinaryExpr.Parse(`(+ 1 2)`)
+		_, matched, err := parse(`(+ 1 2)`)
 		assert.Equal(t, &ast.BinaryExpr{
 			X:  intLit(1),
 			Op: token.ADD,
@@ -479,8 +492,9 @@ func Test_binaryExpr_Parse(t *testing.T) {
 }
 
 func Test_selector_Parse(t *testing.T) {
+	parse := stringParser(Selector)
 	t.Run("field access", func(t *testing.T) {
-		_, matched, err := Selector.Parse(`(sel myStruct Outer Middle Inner)`)
+		_, matched, err := parse(`(sel myStruct Outer Middle Inner)`)
 		assert.Equal(t, &ast.SelectorExpr{
 			X: &ast.SelectorExpr{
 				X: &ast.SelectorExpr{
@@ -494,7 +508,7 @@ func Test_selector_Parse(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("function calls", func(t *testing.T) {
-		_, matched, err := Selector.Parse(`(sel time (Now) (Add time.Second))`)
+		_, matched, err := parse(`(sel time (Now) (Add time.Second))`)
 		assert.Equal(t, &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X: &ast.CallExpr{
@@ -510,7 +524,7 @@ func Test_selector_Parse(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("sel on expr", func(t *testing.T) {
-		_, matched, err := Selector.Parse(`(sel (now) (Unix))`)
+		_, matched, err := parse(`(sel (now) (Unix))`)
 		assert.Equal(t, &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X: &ast.CallExpr{
@@ -526,8 +540,9 @@ func Test_selector_Parse(t *testing.T) {
 }
 
 func Test_structType_Parse(t *testing.T) {
+	parse := stringParser(StructType)
 	t.Run("simple", func(t *testing.T) {
-		_, matched, err := StructType.Parse(`(struct (Field1 int) (Field2 string))`)
+		_, matched, err := parse(`(struct (Field1 int) (Field2 string))`)
 		assert.Equal(t, &ast.StructType{
 			Fields: &ast.FieldList{
 				List: []*ast.Field{
@@ -547,8 +562,9 @@ func Test_structType_Parse(t *testing.T) {
 }
 
 func Test_typeDecl_Parse(t *testing.T) {
+	parse := stringParser(TypeDecl)
 	t.Run("struct", func(t *testing.T) {
-		_, matched, err := TypeDecl.Parse(`(type MyStruct (struct (Field string)))`)
+		_, matched, err := parse(`(type MyStruct (struct (Field string)))`)
 		assert.Equal(t, &ast.GenDecl{
 			Tok: token.TYPE,
 			Specs: []ast.Spec{
@@ -569,4 +585,14 @@ func Test_typeDecl_Parse(t *testing.T) {
 		}, matched)
 		assert.NoError(t, err)
 	})
+}
+
+func TestSource_Advance(t *testing.T) {
+	s := NewSource("Hello")
+	s = s.Advance(3)
+	assert.Equal(t, Source{"lo", 3}, s)
+	s = s.Advance(2)
+	assert.Equal(t, Source{Content: "", Offset: 5}, s)
+	s = s.Advance(1)
+	assert.Equal(t, Source{Content: "", Offset: 5}, s)
 }
