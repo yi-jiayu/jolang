@@ -734,13 +734,35 @@ func Test_statementList_Parse(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestShortVarDecl(t *testing.T) {
-	parse := stringParser(ShortVarDecl)
-	_, matched, err := parse(`(set x 1)`)
-	assert.Equal(t, &ast.AssignStmt{
-		Lhs: []ast.Expr{newIdent("x")},
-		Tok: token.DEFINE,
-		Rhs: []ast.Expr{intLit(1)},
+func TestIdentifierList(t *testing.T) {
+	parse := stringParser(IdentifierList)
+	_, matched, err := parse(`a b c`)
+	assert.Equal(t, []ast.Expr{
+		newIdent("a"),
+		newIdent("b"),
+		newIdent("c"),
 	}, matched)
 	assert.NoError(t, err)
+}
+
+func TestShortVarDecl(t *testing.T) {
+	parse := stringParser(ShortVarDecl)
+	t.Run("single variable", func(t *testing.T) {
+		_, matched, err := parse(`(define x 1)`)
+		assert.Equal(t, &ast.AssignStmt{
+			Lhs: []ast.Expr{newIdent("x")},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{intLit(1)},
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("multiple variables", func(t *testing.T) {
+		_, matched, err := parse(`(define (x y) (1 2))`)
+		assert.Equal(t, &ast.AssignStmt{
+			Lhs: []ast.Expr{newIdent("x"), newIdent("y")},
+			Tok: token.DEFINE,
+			Rhs: []ast.Expr{intLit(1), intLit(2)},
+		}, matched)
+		assert.NoError(t, err)
+	})
 }

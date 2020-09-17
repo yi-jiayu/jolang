@@ -3,5 +3,6 @@
 (import "fmt")
 
 (func main ()
-    (set x 1)
-    (fmt.Println x))
+    (define x 1)
+    (define (y z) (2 3))
+    (fmt.Println x y z))

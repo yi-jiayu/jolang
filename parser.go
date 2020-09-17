@@ -732,16 +732,48 @@ var IfStmt = Map(Parenthesized(Right(
 		}
 	})
 
+var IdentifierList = Map(OneOrMore(WhitespaceWrap(Ident)), func(matched interface{}) interface{} {
+	matches := matched.([]interface{})
+	exprs := make([]ast.Expr, len(matches))
+	for i, match := range matches {
+		exprs[i] = match.(ast.Expr)
+	}
+	return exprs
+})
+
+var ExpressionList = Map(OneOrMore(WhitespaceWrap(Expr)), func(matched interface{}) interface{} {
+	matches := matched.([]interface{})
+	exprs := make([]ast.Expr, len(matches))
+	for i, match := range matches {
+		exprs[i] = match.(ast.Expr)
+	}
+	return exprs
+})
+
 var ShortVarDecl = Map(Parenthesized(Right(
-	Literal("set"), Pair(Right(OneOrMoreWhitespaceChars(),
-		Ident), Right(OneOrMoreWhitespaceChars(),
-		Expr)))),
+	Literal("define"), Pair(Right(OneOrMoreWhitespaceChars(),
+		Choice(Ident, Parenthesized(IdentifierList))), Right(OneOrMoreWhitespaceChars(),
+		Choice(Expr, Parenthesized(ExpressionList)))))),
 	func(matched interface{}) interface{} {
 		pair := matched.(MatchedPair)
+		var lhs []ast.Expr
+		switch v := pair.Left.(type) {
+		case *ast.Ident:
+			lhs = []ast.Expr{v}
+		case []ast.Expr:
+			lhs = v
+		}
+		var rhs []ast.Expr
+		switch v := pair.Right.(type) {
+		case ast.Expr:
+			rhs = []ast.Expr{v}
+		case []ast.Expr:
+			rhs = v
+		}
 		return &ast.AssignStmt{
-			Lhs: []ast.Expr{pair.Left.(*ast.Ident)},
+			Lhs: lhs,
 			Tok: token.DEFINE,
-			Rhs: []ast.Expr{pair.Right.(ast.Expr)},
+			Rhs: rhs,
 		}
 	},
 )
