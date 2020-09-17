@@ -9,7 +9,10 @@ output/%.go: tests/%.jo
 	@diff -u $(basename $<).go $@
 	@rm $@
 
-test: clean build output $(patsubst tests/%.go,output/%.go,$(wildcard tests/*.go))
+unit:
+	go test
+
+test: unit clean build output $(patsubst tests/%.go,output/%.go,$(wildcard tests/*.go))
 
 output:
 	@mkdir -p output
