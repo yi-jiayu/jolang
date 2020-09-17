@@ -34,3 +34,16 @@ func newSelectorExpr(x, sel interface{}) *ast.SelectorExpr {
 	}
 	return &expr
 }
+
+func newCallExpr(fun interface{}, args ...ast.Expr) *ast.CallExpr {
+	expr := &ast.CallExpr{
+		Args: args,
+	}
+	switch v := fun.(type) {
+	case ast.Expr:
+		expr.Fun = v
+	case string:
+		expr.Fun = newIdent(v)
+	}
+	return expr
+}

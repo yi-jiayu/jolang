@@ -226,6 +226,19 @@ func ZeroOrMore(p Parser) ParserFunc {
 	}
 }
 
+func Optional(p Parser) ParserFunc {
+	return func(input Source) (remaining Source, matched interface{}, err error) {
+		remaining = input
+		r, matched, e := p.Parse(remaining)
+		if e != nil {
+			matched = nil
+			return
+		}
+		remaining = r
+		return
+	}
+}
+
 var AnyChar = ParserFunc(func(input Source) (remaining Source, matched interface{}, err error) {
 	remaining = input
 	r, size := utf8.DecodeRuneInString(remaining.Content)
@@ -428,7 +441,14 @@ func MapConst(p Parser, v interface{}) Parser {
 	})
 }
 
-var BinaryOp = Choice(MapConst(Rune('+'), token.ADD), MapConst(Rune('*'), token.MUL), MapConst(Rune('/'), token.QUO))
+var BinaryOp = Choice(
+	MapConst(Rune('+'), token.ADD),
+	MapConst(Rune('*'), token.MUL),
+	MapConst(Rune('/'), token.QUO),
+	MapConst(Rune('='), token.EQL),
+	MapConst(Rune('<'), token.LSS),
+	MapConst(Rune('>'), token.GTR),
+)
 
 type binaryExpr struct{}
 
@@ -584,9 +604,43 @@ func (*typeDecl) Parse(input Source) (remaining Source, matched interface{}, err
 
 var TypeDecl *typeDecl
 
-func StatementList() ParserFunc {
-	return ZeroOrMore(WhitespaceWrap(CallExpr))
+type statementList struct{}
+
+func (*statementList) Parse(input Source) (remaining Source, matched interface{}, err error) {
+	return Map(
+		ZeroOrMore(WhitespaceWrap(Statement)),
+		func(matched interface{}) interface{} {
+			var stmts []ast.Stmt
+			for _, m := range matched.([]interface{}) {
+				switch v := m.(type) {
+				case ast.Expr:
+					stmts = append(stmts, &ast.ExprStmt{X: v})
+				case ast.Stmt:
+					stmts = append(stmts, v)
+				}
+			}
+			return stmts
+		},
+	)(input)
 }
+
+var StatementList *statementList
+
+var Statement = Choice(IfStmt, CallExpr)
+
+var DoExpr = Map(Parenthesized(Right(
+	Literal("do"),
+	Optional(Right(OneOrMoreWhitespaceChars(),
+		StatementList)))),
+	func(matched interface{}) interface{} {
+		if matched == nil {
+			return &ast.BlockStmt{
+				List: []ast.Stmt{},
+			}
+		}
+		return nil
+	},
+)
 
 func Noop() ParserFunc {
 	return func(input Source) (remaining Source, matched interface{}, err error) {
@@ -595,19 +649,17 @@ func Noop() ParserFunc {
 	}
 }
 
-var FunctionDecl = Map(Parenthesized(Right(Literal(token.FUNC.String()), Right(OneOrMoreWhitespaceChars(), Pair(Ident, Right(Right(OneOrMoreWhitespaceChars(), Parenthesized(Noop())), WhitespaceWrap(StatementList())))))),
+var FunctionDecl = Map(Parenthesized(Right(
+	Literal(token.FUNC.String()), Right(OneOrMoreWhitespaceChars(), Pair(
+		Ident, Right(Right(OneOrMoreWhitespaceChars(), Parenthesized(Noop())), WhitespaceWrap(
+			StatementList)))))),
 	func(matched interface{}) interface{} {
 		pair := matched.(MatchedPair)
-		name := pair.Left.(*ast.Ident)
-		var body []ast.Stmt
-		for _, callExpr := range pair.Right.([]interface{}) {
-			body = append(body, &ast.ExprStmt{X: callExpr.(*ast.CallExpr)})
-		}
 		return &ast.FuncDecl{
-			Name: name,
+			Name: pair.Left.(*ast.Ident),
 			Type: &ast.FuncType{Params: &ast.FieldList{}},
 			Body: &ast.BlockStmt{
-				List: body,
+				List: pair.Right.([]ast.Stmt),
 			},
 		}
 	},
@@ -640,6 +692,30 @@ var QualifiedIdent = Map(
 		return &ast.SelectorExpr{
 			X:   x,
 			Sel: sel,
+		}
+	})
+
+var IfStmt = Map(Parenthesized(Right(
+	Literal(token.IF.String()), Pair(Right(ZeroOrMoreWhitespaceChars(),
+		Expr), Right(ZeroOrMoreWhitespaceChars(),
+		Choice(DoExpr, Expr))))),
+	func(matched interface{}) interface{} {
+		pair := matched.(MatchedPair)
+		cond := pair.Left.(ast.Expr)
+		var body *ast.BlockStmt
+		switch v := pair.Right.(type) {
+		case *ast.BlockStmt:
+			body = v
+		case ast.Expr:
+			body = &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.ExprStmt{X: v},
+				},
+			}
+		}
+		return &ast.IfStmt{
+			Cond: cond,
+			Body: body,
 		}
 	})
 

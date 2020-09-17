@@ -606,3 +606,63 @@ func Test__decimalFloatLit_Parse(t *testing.T) {
 	}, matched)
 	assert.NoError(t, err)
 }
+
+func TestIfStmt(t *testing.T) {
+	parse := stringParser(IfStmt)
+	t.Run("identifier cond", func(t *testing.T) {
+		_, matched, err := parse(`(if true (println "true"))`)
+		assert.Equal(t, &ast.IfStmt{
+			Cond: newIdent("true"),
+			Body: &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.ExprStmt{X: newCallExpr("println", strLit(`"true"`))},
+				},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("expr cond", func(t *testing.T) {
+		_, matched, err := parse(`(if (= 2 2) (println "true"))`)
+		assert.Equal(t, &ast.IfStmt{
+			Cond: &ast.BinaryExpr{
+				X:  intLit(2),
+				Op: token.EQL,
+				Y:  intLit(2),
+			},
+			Body: &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.ExprStmt{X: newCallExpr("println", strLit(`"true"`))},
+				},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
+}
+
+func TestDoExpr(t *testing.T) {
+	parse := stringParser(DoExpr)
+	t.Run("empty", func(t *testing.T) {
+		_, matched, err := parse(`(do)`)
+		assert.Equal(t, &ast.BlockStmt{
+			List: []ast.Stmt{},
+		}, matched)
+		assert.NoError(t, err)
+	})
+}
+
+func Test_statementList_Parse(t *testing.T) {
+	parse := stringParser(StatementList)
+	_, matched, err := parse(`(println 1) (if true (println 2))`)
+	assert.Equal(t, []ast.Stmt{
+		&ast.ExprStmt{X: newCallExpr("println", intLit(1))},
+		&ast.IfStmt{
+			Cond: newIdent("true"),
+			Body: &ast.BlockStmt{
+				List: []ast.Stmt{
+					&ast.ExprStmt{X: newCallExpr("println", intLit(2))},
+				},
+			},
+		},
+	}, matched)
+	assert.NoError(t, err)
+}
