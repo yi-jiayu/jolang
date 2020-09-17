@@ -324,10 +324,36 @@ func WhitespaceWrap(p Parser) ParserFunc {
 	return Right(ZeroOrMoreWhitespaceChars(), Left(p, ZeroOrMoreWhitespaceChars()))
 }
 
+type _decimalFloatLit struct{}
+
+func (*_decimalFloatLit) Parse(input Source) (remaining Source, matched interface{}, err error) {
+	return Map(
+		Pair(OneOrMore(decimalDigit), Right(Rune('.'), OneOrMore(decimalDigit))),
+		func(matched interface{}) interface{} {
+			pair := matched.(MatchedPair)
+			var intPart strings.Builder
+			for _, v := range pair.Left.([]interface{}) {
+				intPart.WriteRune(v.(rune))
+			}
+			var fractionalPart strings.Builder
+			for _, v := range pair.Right.([]interface{}) {
+				fractionalPart.WriteRune(v.(rune))
+			}
+			return &ast.BasicLit{
+				Kind:  token.FLOAT,
+				Value: intPart.String() + "." + fractionalPart.String(),
+			}
+		},
+	)(input)
+}
+
+var decimalFloatLit *_decimalFloatLit
+
+var decimalDigit = Pred(AnyChar, func(matched interface{}) bool {
+	return unicode.IsDigit(matched.(rune))
+})
+
 func decimalLit() ParserFunc {
-	decimalDigit := Pred(AnyChar, func(matched interface{}) bool {
-		return unicode.IsDigit(matched.(rune))
-	})
 	nonZeroDigit := Pred(decimalDigit, func(matched interface{}) bool {
 		return matched != '0'
 	})
@@ -360,7 +386,7 @@ func stringLit() ParserFunc {
 }
 
 func basicLit() ParserFunc {
-	return Choice(decimalLit(), stringLit())
+	return Choice(decimalFloatLit, decimalLit(), stringLit())
 }
 
 func Rune(r rune) ParserFunc {
@@ -402,7 +428,7 @@ func MapConst(p Parser, v interface{}) Parser {
 	})
 }
 
-var BinaryOp = Choice(MapConst(Rune('+'), token.ADD), MapConst(Rune('*'), token.MUL))
+var BinaryOp = Choice(MapConst(Rune('+'), token.ADD), MapConst(Rune('*'), token.MUL), MapConst(Rune('/'), token.QUO))
 
 type binaryExpr struct{}
 

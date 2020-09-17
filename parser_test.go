@@ -596,3 +596,13 @@ func TestSource_Advance(t *testing.T) {
 	s = s.Advance(1)
 	assert.Equal(t, Source{Content: "", Offset: 5}, s)
 }
+
+func Test__decimalFloatLit_Parse(t *testing.T) {
+	parse := stringParser(decimalFloatLit)
+	_, matched, err := parse("0.1")
+	assert.Equal(t, &ast.BasicLit{
+		Kind:  token.FLOAT,
+		Value: "0.1",
+	}, matched)
+	assert.NoError(t, err)
+}
