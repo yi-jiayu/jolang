@@ -182,15 +182,15 @@ func OneOrMore(p Parser) ParserFunc {
 		}
 		matches := []interface{}{match}
 		for {
+			if remaining.Content == "" {
+				break
+			}
 			var e error
 			remaining, match, e = p.Parse(remaining)
 			if e != nil {
 				break
 			}
 			matches = append(matches, match)
-			if remaining.Content == "" {
-				break
-			}
 		}
 		matched = matches
 		return
@@ -777,48 +777,47 @@ var IfStmt = Map(Parenthesized(Right(
 		}
 	})
 
-var IdentifierList = Map(OneOrMore(WhitespaceWrap(Ident)), func(matched interface{}) interface{} {
-	matches := matched.([]interface{})
-	exprs := make([]ast.Expr, len(matches))
-	for i, match := range matches {
-		exprs[i] = match.(ast.Expr)
+var IdentifierList = Map(Choice(Parenthesized(OneOrMore(WhitespaceWrap(Ident))), Ident), func(matched interface{}) interface{} {
+	switch v := matched.(type) {
+	case []interface{}:
+		exprs := make([]ast.Expr, len(v))
+		for i, match := range v {
+			exprs[i] = match.(ast.Expr)
+		}
+		return exprs
+	case *ast.Ident:
+		return []ast.Expr{v}
 	}
-	return exprs
+	return nil
 })
 
-var ExpressionList = Map(OneOrMore(WhitespaceWrap(Expr)), func(matched interface{}) interface{} {
-	matches := matched.([]interface{})
-	exprs := make([]ast.Expr, len(matches))
-	for i, match := range matches {
-		exprs[i] = match.(ast.Expr)
+// ExpressionList matches a list of parenthesized expressions, a single identifier or a single basic literal and returns a slice of ast.Expr.
+var ExpressionList = Map(Choice(Parenthesized(OneOrMore(WhitespaceWrap(Expr))), Ident, basicLit()), func(matched interface{}) interface{} {
+	switch v := matched.(type) {
+	case []interface{}:
+		exprs := make([]ast.Expr, len(v))
+		for i, match := range v {
+			exprs[i] = match.(ast.Expr)
+		}
+		return exprs
+	case *ast.Ident:
+		return []ast.Expr{v}
+	case *ast.BasicLit:
+		return []ast.Expr{v}
 	}
-	return exprs
+	return nil
 })
 
 var Define = Map(Parenthesized(Right(
 	Literal("define"), Pair(Right(OneOrMoreWhitespaceChars(),
-		Choice(Ident, Parenthesized(IdentifierList))), Right(OneOrMoreWhitespaceChars(),
-		Choice(Expr, Parenthesized(ExpressionList)))))),
+		IdentifierList), Right(OneOrMoreWhitespaceChars(),
+		ExpressionList)))),
 	func(matched interface{}) interface{} {
 		pair := matched.(MatchedPair)
-		var lhs []ast.Expr
-		switch v := pair.Left.(type) {
-		case *ast.Ident:
-			lhs = []ast.Expr{v}
-		case []ast.Expr:
-			lhs = v
-		}
-		var rhs []ast.Expr
-		switch v := pair.Right.(type) {
-		case ast.Expr:
-			rhs = []ast.Expr{v}
-		case []ast.Expr:
-			rhs = v
-		}
 		return &ast.AssignStmt{
-			Lhs: lhs,
+			Lhs: pair.Left.([]ast.Expr),
 			Tok: token.DEFINE,
-			Rhs: rhs,
+			Rhs: pair.Right.([]ast.Expr),
 		}
 	},
 )

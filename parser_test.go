@@ -741,13 +741,86 @@ func Test_statementList_Parse(t *testing.T) {
 
 func TestIdentifierList(t *testing.T) {
 	parse := stringParser(IdentifierList)
-	_, matched, err := parse(`a b c`)
-	assert.Equal(t, []ast.Expr{
-		ast.NewIdent("a"),
-		ast.NewIdent("b"),
-		ast.NewIdent("c"),
-	}, matched)
-	assert.NoError(t, err)
+	t.Run("single", func(t *testing.T) {
+		_, matched, err := parse(`a`)
+		assert.NoError(t, err)
+		assert.Equal(t, []ast.Expr{
+			ast.NewIdent("a"),
+		}, matched)
+	})
+	t.Run("multiple", func(t *testing.T) {
+		_, matched, err := parse(`(a b c)`)
+		assert.NoError(t, err)
+		assert.Equal(t, []ast.Expr{
+			ast.NewIdent("a"),
+			ast.NewIdent("b"),
+			ast.NewIdent("c"),
+		}, matched)
+	})
+}
+
+func TestExpressionList(t *testing.T) {
+	parse := stringParser(ExpressionList)
+	t.Run("single ident", func(t *testing.T) {
+		_, matched, err := parse(`a`)
+		assert.NoError(t, err)
+		assert.Equal(t, []ast.Expr{
+			ast.NewIdent("a"),
+		}, matched)
+	})
+	t.Run("single expression", func(t *testing.T) {
+		_, matched, err := parse(`((+ 1 2))`)
+		assert.NoError(t, err)
+		assert.Equal(t, []ast.Expr{
+			&ast.BinaryExpr{
+				X:  intLit(1),
+				Op: token.ADD,
+				Y:  intLit(2),
+			},
+		}, matched)
+	})
+	t.Run("multiple idents", func(t *testing.T) {
+		_, matched, err := parse(`(a b c)`)
+		assert.NoError(t, err)
+		assert.Equal(t, []ast.Expr{
+			ast.NewIdent("a"),
+			ast.NewIdent("b"),
+			ast.NewIdent("c"),
+		}, matched)
+	})
+	t.Run("list with single expression", func(t *testing.T) {
+		_, matched, err := parse(`((+ 1 2))`)
+		assert.NoError(t, err)
+		assert.Equal(t, []ast.Expr{
+			&ast.BinaryExpr{
+				X:  intLit(1),
+				Op: token.ADD,
+				Y:  intLit(2),
+			},
+		}, matched)
+	})
+	t.Run("multiple expressions", func(t *testing.T) {
+		_, matched, err := parse(`((+ 1 2) (r.ReadString '\n'))`)
+		assert.NoError(t, err)
+		assert.Equal(t, []ast.Expr{
+			&ast.BinaryExpr{
+				X:  intLit(1),
+				Op: token.ADD,
+				Y:  intLit(2),
+			},
+			&ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent("r"),
+					Sel: ast.NewIdent("ReadString"),
+				},
+				Args: []ast.Expr{&ast.BasicLit{
+					Kind:  token.CHAR,
+					Value: `'\n'`,
+				}},
+			},
+		}, matched)
+
+	})
 }
 
 func TestDefine(t *testing.T) {
@@ -771,7 +844,7 @@ func TestDefine(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("function call", func(t *testing.T) {
-		_, matched, err := parse(`(define (text _) (r.ReadString '\n'))`)
+		_, matched, err := parse(`(define (text _) ((r.ReadString '\n')))`)
 		assert.Equal(t, &ast.AssignStmt{
 			Lhs: []ast.Expr{ast.NewIdent("text"), ast.NewIdent("_")},
 			Tok: token.DEFINE,
