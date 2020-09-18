@@ -846,3 +846,33 @@ func TestRuneLit(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestIncDecStmt(t *testing.T) {
+	parse := stringParser(IncDecStmt)
+	t.Run("inc", func(t *testing.T) {
+		_, matched, err := parse(`(inc i)`)
+		assert.Equal(t, &ast.IncDecStmt{
+			X:   ast.NewIdent("i"),
+			Tok: token.INC,
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("dec", func(t *testing.T) {
+		_, matched, err := parse(`(dec i)`)
+		assert.Equal(t, &ast.IncDecStmt{
+			X:   ast.NewIdent("i"),
+			Tok: token.DEC,
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("expr", func(t *testing.T) {
+		_, matched, err := parse(`(dec (intFn))`)
+		assert.Equal(t, &ast.IncDecStmt{
+			X: &ast.CallExpr{
+				Fun: ast.NewIdent("intFn"),
+			},
+			Tok: token.DEC,
+		}, matched)
+		assert.NoError(t, err)
+	})
+}

@@ -661,7 +661,19 @@ func (*statementList) Parse(input Source) (remaining Source, matched interface{}
 
 var StatementList *statementList
 
-var Statement = Choice(DeclStmt, Define, IfStmt, CallExpr)
+var Statement = Choice(DeclStmt, IfStmt, SimpleStmt)
+
+var SimpleStmt = Choice(Define, Expr)
+
+var IncDecStmt = Map(
+	Parenthesized(Pair(Choice(MapConst(Keyword("inc"), token.INC), MapConst(Keyword("dec"), token.DEC)), WhitespaceWrap(Expr))),
+	func(matched interface{}) interface{} {
+		pair := matched.(MatchedPair)
+		return &ast.IncDecStmt{
+			X:   pair.Right.(ast.Expr),
+			Tok: pair.Left.(token.Token),
+		}
+	})
 
 var DoExpr = Map(Parenthesized(Right(
 	Literal("do"),
