@@ -18,6 +18,11 @@ func (s Source) Remaining() string {
 	return (*s.Content)[s.Offset:]
 }
 
+// Finished indicates whether the input has been fully consumed.
+func (s Source) Finished() bool {
+	return s.Offset >= len(*s.Content)
+}
+
 func (s Source) Advance(n int) Source {
 	if n+s.Offset >= len(*s.Content) {
 		return Source{
@@ -29,6 +34,11 @@ func (s Source) Advance(n int) Source {
 		Content: s.Content,
 		Offset:  s.Offset + n,
 	}
+}
+
+// PeekRune calls utf8.DecodeRuneInString on the unparsed input.
+func (s Source) PeekRune() (rune, int) {
+	return utf8.DecodeRuneInString(s.Remaining())
 }
 
 func (s Source) Peek() string {
@@ -187,7 +197,7 @@ func OneOrMore(p Parser) ParserFunc {
 		}
 		matches := []interface{}{match}
 		for {
-			if output.Remaining() == "" {
+			if output.Finished() {
 				break
 			}
 			var e error
@@ -203,16 +213,16 @@ func OneOrMore(p Parser) ParserFunc {
 }
 
 func ZeroOrMore(p Parser) ParserFunc {
-	return func(input Source) (state Source, matched interface{}, err error) {
-		state = input
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
 		matches := make([]interface{}, 0)
 		for {
-			if state.Remaining() == "" {
+			if output.Finished() {
 				break
 			}
 			var match interface{}
 			var _err error
-			state, match, _err = p.Parse(state)
+			output, match, _err = p.Parse(output)
 			if _err != nil {
 				break
 			}
@@ -239,7 +249,7 @@ func Optional(p Parser) ParserFunc {
 
 var AnyChar = ParserFunc(func(input Source) (output Source, matched interface{}, err error) {
 	output = input
-	r, size := utf8.DecodeRuneInString(output.Remaining())
+	r, size := output.PeekRune()
 	if r == utf8.RuneError {
 		if size == 1 {
 			err = NewParseError(output.Offset, "wanted any character, got invalid UTF-8 encoding")
@@ -432,7 +442,7 @@ func basicLit() ParserFunc {
 func Rune(r rune) ParserFunc {
 	return func(input Source) (output Source, matched interface{}, err error) {
 		output = input
-		c, size := utf8.DecodeRuneInString(output.Remaining())
+		c, size := output.PeekRune()
 		if c == utf8.RuneError {
 			if size == 1 {
 				err = NewParseError(output.Offset, fmt.Sprintf("wanted a literal %q, got invalid UTF-8 encoding", r))
