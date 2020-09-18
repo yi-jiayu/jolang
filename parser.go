@@ -10,24 +10,29 @@ import (
 )
 
 type Source struct {
-	Content string
+	Content *string
 	Offset  int
 }
 
+func (s Source) Remaining() string {
+	return (*s.Content)[s.Offset:]
+}
+
 func (s Source) Advance(n int) Source {
-	if n > len(s.Content) {
+	if n+s.Offset >= len(*s.Content) {
 		return Source{
-			Offset: s.Offset,
+			Content: s.Content,
+			Offset:  len(*s.Content),
 		}
 	}
 	return Source{
-		Content: s.Content[n:],
+		Content: s.Content,
 		Offset:  s.Offset + n,
 	}
 }
 
 func (s Source) Peek() string {
-	for _, r := range s.Content {
+	for _, r := range *s.Content {
 		return string(r)
 	}
 	return ""
@@ -35,7 +40,7 @@ func (s Source) Peek() string {
 
 func NewSource(content string) Source {
 	return Source{
-		Content: content,
+		Content: &content,
 	}
 }
 
@@ -56,35 +61,35 @@ func NewParseError(offset int, message string) error {
 }
 
 type Parser interface {
-	Parse(input Source) (remaining Source, matched interface{}, err error)
+	Parse(input Source) (output Source, matched interface{}, err error)
 }
 
-type ParserFunc func(input Source) (remaining Source, matched interface{}, err error)
+type ParserFunc func(input Source) (output Source, matched interface{}, err error)
 
-func (p ParserFunc) Parse(input Source) (remaining Source, matched interface{}, err error) {
+func (p ParserFunc) Parse(input Source) (output Source, matched interface{}, err error) {
 	return p(input)
 }
 
 func Literal(s string) ParserFunc {
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
-		if strings.HasPrefix(remaining.Content, s) {
-			remaining = remaining.Advance(len(s))
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
+		if strings.HasPrefix(output.Remaining(), s) {
+			output = output.Advance(len(s))
 			matched = s
 			return
 		}
-		err = NewParseError(remaining.Offset, fmt.Sprintf("wanted a literal %q, got: %q", s, remaining.Peek()))
+		err = NewParseError(output.Offset, fmt.Sprintf("wanted a literal %q, got: %q", s, output.Peek()))
 		return
 	}
 }
 
 // Identifier matches an identifier string.
-var Identifier = ParserFunc(func(input Source) (remaining Source, matched interface{}, err error) {
-	remaining = input
+var Identifier = ParserFunc(func(input Source) (output Source, matched interface{}, err error) {
+	output = input
 	var match strings.Builder
-	for i, r := range remaining.Content {
+	for i, r := range output.Remaining() {
 		if i == 0 && !unicode.IsLetter(r) && r != '_' {
-			err = NewParseError(remaining.Offset, fmt.Sprintf("wanted identifier, got %q", r))
+			err = NewParseError(output.Offset, fmt.Sprintf("wanted identifier, got %q", r))
 			return
 		}
 		if !unicode.IsLetter(r) && r != '_' && !unicode.IsDigit(r) {
@@ -93,7 +98,7 @@ var Identifier = ParserFunc(func(input Source) (remaining Source, matched interf
 		match.WriteRune(r)
 	}
 	matched = match.String()
-	remaining = remaining.Advance(match.Len())
+	output = output.Advance(match.Len())
 	return
 })
 
@@ -112,9 +117,9 @@ type MatchedPair struct {
 }
 
 func Pair(p1, p2 Parser) ParserFunc {
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
-		r, left, err := p1.Parse(remaining)
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
+		r, left, err := p1.Parse(output)
 		if err != nil {
 			return
 		}
@@ -122,16 +127,16 @@ func Pair(p1, p2 Parser) ParserFunc {
 		if err != nil {
 			return
 		}
-		remaining = r
+		output = r
 		matched = MatchedPair{Left: left, Right: right}
 		return
 	}
 }
 
 func Sequence(ps ...Parser) ParserFunc {
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
-		r := remaining
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
+		r := output
 		var matches []interface{}
 		for _, p := range ps {
 			var m interface{}
@@ -141,7 +146,7 @@ func Sequence(ps ...Parser) ParserFunc {
 			}
 			matches = append(matches, m)
 		}
-		remaining = r
+		output = r
 		matched = matches
 		return
 	}
@@ -149,9 +154,9 @@ func Sequence(ps ...Parser) ParserFunc {
 
 func Left(p1, p2 Parser) ParserFunc {
 	p := Pair(p1, p2)
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
-		remaining, pair, err := p(remaining)
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
+		output, pair, err := p(output)
 		if err != nil {
 			return
 		}
@@ -162,9 +167,9 @@ func Left(p1, p2 Parser) ParserFunc {
 
 func Right(p1, p2 Parser) ParserFunc {
 	p := Pair(p1, p2)
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
-		remaining, pair, err := p(remaining)
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
+		output, pair, err := p(output)
 		if err != nil {
 			return
 		}
@@ -174,19 +179,19 @@ func Right(p1, p2 Parser) ParserFunc {
 }
 
 func OneOrMore(p Parser) ParserFunc {
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
-		remaining, match, err := p.Parse(remaining)
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
+		output, match, err := p.Parse(output)
 		if err != nil {
 			return
 		}
 		matches := []interface{}{match}
 		for {
-			if remaining.Content == "" {
+			if output.Remaining() == "" {
 				break
 			}
 			var e error
-			remaining, match, e = p.Parse(remaining)
+			output, match, e = p.Parse(output)
 			if e != nil {
 				break
 			}
@@ -198,20 +203,20 @@ func OneOrMore(p Parser) ParserFunc {
 }
 
 func ZeroOrMore(p Parser) ParserFunc {
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
+	return func(input Source) (state Source, matched interface{}, err error) {
+		state = input
 		matches := make([]interface{}, 0)
 		for {
+			if state.Remaining() == "" {
+				break
+			}
 			var match interface{}
 			var _err error
-			remaining, match, _err = p.Parse(remaining)
+			state, match, _err = p.Parse(state)
 			if _err != nil {
 				break
 			}
 			matches = append(matches, match)
-			if remaining.Content == "" {
-				break
-			}
 		}
 		matched = matches
 		return
@@ -220,30 +225,30 @@ func ZeroOrMore(p Parser) ParserFunc {
 
 //goland:noinspection GoUnusedExportedFunction
 func Optional(p Parser) ParserFunc {
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
-		r, matched, e := p.Parse(remaining)
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
+		r, matched, e := p.Parse(output)
 		if e != nil {
 			matched = nil
 			return
 		}
-		remaining = r
+		output = r
 		return
 	}
 }
 
-var AnyChar = ParserFunc(func(input Source) (remaining Source, matched interface{}, err error) {
-	remaining = input
-	r, size := utf8.DecodeRuneInString(remaining.Content)
+var AnyChar = ParserFunc(func(input Source) (output Source, matched interface{}, err error) {
+	output = input
+	r, size := utf8.DecodeRuneInString(output.Remaining())
 	if r == utf8.RuneError {
 		if size == 1 {
-			err = NewParseError(remaining.Offset, "wanted any character, got invalid UTF-8 encoding")
+			err = NewParseError(output.Offset, "wanted any character, got invalid UTF-8 encoding")
 		} else {
-			err = NewParseError(remaining.Offset, "wanted any character, got \"\"")
+			err = NewParseError(output.Offset, "wanted any character, got \"\"")
 		}
 		return
 	}
-	remaining = remaining.Advance(size)
+	output = output.Advance(size)
 	matched = r
 	return
 })
@@ -280,9 +285,9 @@ func ZeroOrMoreWhitespaceChars() ParserFunc {
 }
 
 func Map(p Parser, f func(matched interface{}) interface{}) ParserFunc {
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
-		remaining, matched, err = p.Parse(remaining)
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
+		output, matched, err = p.Parse(output)
 		if err != nil {
 			return
 		}
@@ -310,14 +315,14 @@ func QuotedString() ParserFunc {
 }
 
 func Choice(ps ...Parser) ParserFunc {
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
 		var r Source
 		var m interface{}
 		for _, p := range ps {
-			r, m, err = p.Parse(remaining)
+			r, m, err = p.Parse(output)
 			if err == nil {
-				remaining = r
+				output = r
 				matched = m
 				return
 			}
@@ -332,7 +337,7 @@ func WhitespaceWrap(p Parser) ParserFunc {
 
 type _decimalFloatLit struct{}
 
-func (*_decimalFloatLit) Parse(input Source) (remaining Source, matched interface{}, err error) {
+func (*_decimalFloatLit) Parse(input Source) (output Source, matched interface{}, err error) {
 	return Map(
 		Pair(OneOrMore(decimalDigit), Right(Rune('.'), OneOrMore(decimalDigit))),
 		func(matched interface{}) interface{} {
@@ -425,22 +430,22 @@ func basicLit() ParserFunc {
 }
 
 func Rune(r rune) ParserFunc {
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
-		c, size := utf8.DecodeRuneInString(remaining.Content)
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
+		c, size := utf8.DecodeRuneInString(output.Remaining())
 		if c == utf8.RuneError {
 			if size == 1 {
-				err = NewParseError(remaining.Offset, fmt.Sprintf("wanted a literal %q, got invalid UTF-8 encoding", r))
+				err = NewParseError(output.Offset, fmt.Sprintf("wanted a literal %q, got invalid UTF-8 encoding", r))
 			} else {
-				err = NewParseError(remaining.Offset, fmt.Sprintf("wanted a literal %q, got \"\"", r))
+				err = NewParseError(output.Offset, fmt.Sprintf("wanted a literal %q, got \"\"", r))
 			}
 			return
 		}
 		if r != c {
-			err = NewParseError(remaining.Offset, fmt.Sprintf("wanted a literal %q, got %q", r, c))
+			err = NewParseError(output.Offset, fmt.Sprintf("wanted a literal %q, got %q", r, c))
 			return
 		}
-		remaining = remaining.Advance(size)
+		output = output.Advance(size)
 		matched = c
 		return
 	}
@@ -474,7 +479,7 @@ var BinaryOp = Choice(
 
 type binaryExpr struct{}
 
-func (*binaryExpr) Parse(input Source) (remaining Source, matched interface{}, err error) {
+func (*binaryExpr) Parse(input Source) (output Source, matched interface{}, err error) {
 	return Map(
 		Parenthesized(Pair(BinaryOp, Right(OneOrMoreWhitespaceChars(), Pair(Expr, Right(OneOrMoreWhitespaceChars(), Expr))))),
 		func(matched interface{}) interface{} {
@@ -505,7 +510,7 @@ var UnaryExpr = Map(Pair(UnaryOp, Expr), func(matched interface{}) interface{} {
 
 type callExpr struct{}
 
-func (*callExpr) Parse(input Source) (remaining Source, matched interface{}, err error) {
+func (*callExpr) Parse(input Source) (output Source, matched interface{}, err error) {
 	return Map(Parenthesized(Pair(OperandName, ZeroOrMore(Right(OneOrMoreWhitespaceChars(), Expr)))),
 		func(matched interface{}) interface{} {
 			pair := matched.(MatchedPair)
@@ -525,7 +530,7 @@ var CallExpr *callExpr
 
 type expr struct{}
 
-func (*expr) Parse(input Source) (remaining Source, matched interface{}, err error) {
+func (*expr) Parse(input Source) (output Source, matched interface{}, err error) {
 	return Choice(basicLit(), BinaryExpr, UnaryExpr, Selector, CallExpr, OperandName)(input)
 }
 
@@ -550,7 +555,7 @@ var SelectorCall = Map(Parenthesized(Pair(Ident, ZeroOrMore(Right(OneOrMoreWhite
 
 type selector struct{}
 
-func (*selector) Parse(input Source) (remaining Source, matched interface{}, err error) {
+func (*selector) Parse(input Source) (output Source, matched interface{}, err error) {
 	return Map(
 		Parenthesized(Right(
 			Literal("sel"),
@@ -585,7 +590,7 @@ var Selector *selector
 
 type structType struct{}
 
-func (*structType) Parse(input Source) (remaining Source, matched interface{}, err error) {
+func (*structType) Parse(input Source) (output Source, matched interface{}, err error) {
 	return Map(Parenthesized(
 		Right(
 			Literal(token.STRUCT.String()),
@@ -617,7 +622,7 @@ var StructType *structType
 
 type typeDecl struct{}
 
-func (*typeDecl) Parse(input Source) (remaining Source, matched interface{}, err error) {
+func (*typeDecl) Parse(input Source) (output Source, matched interface{}, err error) {
 	return Map(Parenthesized(Right(
 		Literal(token.TYPE.String()), Right(OneOrMoreWhitespaceChars(),
 			Pair(Ident, Right(OneOrMoreWhitespaceChars(),
@@ -640,7 +645,7 @@ var TypeDecl *typeDecl
 
 type statementList struct{}
 
-func (*statementList) Parse(input Source) (remaining Source, matched interface{}, err error) {
+func (*statementList) Parse(input Source) (output Source, matched interface{}, err error) {
 	return Map(
 		ZeroOrMore(WhitespaceWrap(Statement)),
 		func(matched interface{}) interface{} {
@@ -689,8 +694,8 @@ var DoExpr = Map(Parenthesized(Right(
 )
 
 func Noop() ParserFunc {
-	return func(input Source) (remaining Source, matched interface{}, err error) {
-		remaining = input
+	return func(input Source) (output Source, matched interface{}, err error) {
+		output = input
 		return
 	}
 }
@@ -743,7 +748,7 @@ var QualifiedIdent = Map(
 
 type block struct{}
 
-func (*block) Parse(input Source) (remaining Source, matched interface{}, err error) {
+func (*block) Parse(input Source) (output Source, matched interface{}, err error) {
 	return Map(
 		Choice(DoExpr, Statement),
 		func(matched interface{}) interface{} {
