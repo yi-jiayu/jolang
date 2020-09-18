@@ -288,8 +288,8 @@ func TestSourceFile(t *testing.T) {
 							&ast.ExprStmt{
 								X: &ast.CallExpr{
 									Fun: &ast.SelectorExpr{
-										X:   newIdent("fmt"),
-										Sel: newIdent("Println"),
+										X:   ast.NewIdent("fmt"),
+										Sel: ast.NewIdent("Println"),
 									},
 									Args: []ast.Expr{
 										&ast.BasicLit{
@@ -321,7 +321,7 @@ func Test_callExpr_Parse(t *testing.T) {
 	t.Run("literal arguments", func(t *testing.T) {
 		_, matched, err := parse(`(println "Hello, World")`)
 		assert.Equal(t, &ast.CallExpr{
-			Fun:  newIdent("println"),
+			Fun:  ast.NewIdent("println"),
 			Args: []ast.Expr{strLit(`"Hello, World"`)},
 		}, matched)
 		assert.NoError(t, err)
@@ -329,14 +329,14 @@ func Test_callExpr_Parse(t *testing.T) {
 	t.Run("no arguments", func(t *testing.T) {
 		_, matched, err := parse(`(f)`)
 		assert.Equal(t, &ast.CallExpr{
-			Fun: newIdent("f"),
+			Fun: ast.NewIdent("f"),
 		}, matched)
 		assert.NoError(t, err)
 	})
 	t.Run("nested call expressions", func(t *testing.T) {
 		_, matched, err := parse(`(println "Hello" (fmt.Sprint "World"))`)
 		assert.Equal(t, &ast.CallExpr{
-			Fun: newIdent("println"),
+			Fun: ast.NewIdent("println"),
 			Args: []ast.Expr{
 				strLit(`"Hello"`),
 				&ast.CallExpr{
@@ -459,7 +459,7 @@ func TestOperandName(t *testing.T) {
 	parse := stringParser(OperandName)
 	t.Run("unqualified", func(t *testing.T) {
 		_, matched, err := parse("println")
-		assert.Equal(t, newIdent("println"), matched)
+		assert.Equal(t, ast.NewIdent("println"), matched)
 		assert.NoError(t, err)
 	})
 	t.Run("qualified indentifier", func(t *testing.T) {
@@ -503,12 +503,12 @@ func Test_selector_Parse(t *testing.T) {
 		assert.Equal(t, &ast.SelectorExpr{
 			X: &ast.SelectorExpr{
 				X: &ast.SelectorExpr{
-					X:   newIdent("myStruct"),
-					Sel: newIdent("Outer"),
+					X:   ast.NewIdent("myStruct"),
+					Sel: ast.NewIdent("Outer"),
 				},
-				Sel: newIdent("Middle"),
+				Sel: ast.NewIdent("Middle"),
 			},
-			Sel: newIdent("Inner"),
+			Sel: ast.NewIdent("Inner"),
 		}, matched)
 		assert.NoError(t, err)
 	})
@@ -518,11 +518,11 @@ func Test_selector_Parse(t *testing.T) {
 			Fun: &ast.SelectorExpr{
 				X: &ast.CallExpr{
 					Fun: &ast.SelectorExpr{
-						X:   newIdent("time"),
-						Sel: newIdent("Now"),
+						X:   ast.NewIdent("time"),
+						Sel: ast.NewIdent("Now"),
 					},
 				},
-				Sel: newIdent("Add"),
+				Sel: ast.NewIdent("Add"),
 			},
 			Args: []ast.Expr{newSelectorExpr("time", "Second")},
 		}, matched)
@@ -617,7 +617,7 @@ func TestIfStmt(t *testing.T) {
 	t.Run("identifier cond", func(t *testing.T) {
 		_, matched, err := parse(`(if true (println "true"))`)
 		assert.Equal(t, &ast.IfStmt{
-			Cond: newIdent("true"),
+			Cond: ast.NewIdent("true"),
 			Body: &ast.BlockStmt{
 				List: []ast.Stmt{
 					&ast.ExprStmt{X: newCallExpr("println", strLit(`"true"`))},
@@ -645,11 +645,11 @@ func TestIfStmt(t *testing.T) {
 	t.Run("do block", func(t *testing.T) {
 		_, matched, err := parse(`(if true (do (println true) (println false)))`)
 		assert.Equal(t, &ast.IfStmt{
-			Cond: newIdent("true"),
+			Cond: ast.NewIdent("true"),
 			Body: &ast.BlockStmt{
 				List: []ast.Stmt{
-					&ast.ExprStmt{X: newCallExpr("println", newIdent("true"))},
-					&ast.ExprStmt{X: newCallExpr("println", newIdent("false"))},
+					&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("true"))},
+					&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("false"))},
 				},
 			},
 		}, matched)
@@ -658,7 +658,7 @@ func TestIfStmt(t *testing.T) {
 	t.Run("else block", func(t *testing.T) {
 		_, matched, err := parse(`(if true (println "true") (println "false"))`)
 		assert.Equal(t, &ast.IfStmt{
-			Cond: newIdent("true"),
+			Cond: ast.NewIdent("true"),
 			Body: &ast.BlockStmt{
 				List: []ast.Stmt{
 					&ast.ExprStmt{X: newCallExpr("println", strLit(`"true"`))},
@@ -675,7 +675,7 @@ func TestIfStmt(t *testing.T) {
 	t.Run("else block with do", func(t *testing.T) {
 		_, matched, err := parse(`(if true (println "true") (do (println "false") (println "false")))`)
 		assert.Equal(t, &ast.IfStmt{
-			Cond: newIdent("true"),
+			Cond: ast.NewIdent("true"),
 			Body: &ast.BlockStmt{
 				List: []ast.Stmt{
 					&ast.ExprStmt{X: newCallExpr("println", strLit(`"true"`))},
@@ -705,7 +705,7 @@ func TestDoExpr(t *testing.T) {
 		_, matched, err := parse(`(do (println true))`)
 		assert.Equal(t, &ast.BlockStmt{
 			List: []ast.Stmt{
-				&ast.ExprStmt{X: newCallExpr("println", newIdent("true"))},
+				&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("true"))},
 			},
 		}, matched)
 		assert.NoError(t, err)
@@ -714,8 +714,8 @@ func TestDoExpr(t *testing.T) {
 		_, matched, err := parse(`(do (println true) (println false))`)
 		assert.Equal(t, &ast.BlockStmt{
 			List: []ast.Stmt{
-				&ast.ExprStmt{X: newCallExpr("println", newIdent("true"))},
-				&ast.ExprStmt{X: newCallExpr("println", newIdent("false"))},
+				&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("true"))},
+				&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("false"))},
 			},
 		}, matched)
 		assert.NoError(t, err)
@@ -728,7 +728,7 @@ func Test_statementList_Parse(t *testing.T) {
 	assert.Equal(t, []ast.Stmt{
 		&ast.ExprStmt{X: newCallExpr("println", intLit(1))},
 		&ast.IfStmt{
-			Cond: newIdent("true"),
+			Cond: ast.NewIdent("true"),
 			Body: &ast.BlockStmt{
 				List: []ast.Stmt{
 					&ast.ExprStmt{X: newCallExpr("println", intLit(2))},
@@ -743,9 +743,9 @@ func TestIdentifierList(t *testing.T) {
 	parse := stringParser(IdentifierList)
 	_, matched, err := parse(`a b c`)
 	assert.Equal(t, []ast.Expr{
-		newIdent("a"),
-		newIdent("b"),
-		newIdent("c"),
+		ast.NewIdent("a"),
+		ast.NewIdent("b"),
+		ast.NewIdent("c"),
 	}, matched)
 	assert.NoError(t, err)
 }
@@ -755,7 +755,7 @@ func TestDefine(t *testing.T) {
 	t.Run("single variable", func(t *testing.T) {
 		_, matched, err := parse(`(define x 1)`)
 		assert.Equal(t, &ast.AssignStmt{
-			Lhs: []ast.Expr{newIdent("x")},
+			Lhs: []ast.Expr{ast.NewIdent("x")},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{intLit(1)},
 		}, matched)
@@ -764,7 +764,7 @@ func TestDefine(t *testing.T) {
 	t.Run("multiple variables", func(t *testing.T) {
 		_, matched, err := parse(`(define (x y) (1 2))`)
 		assert.Equal(t, &ast.AssignStmt{
-			Lhs: []ast.Expr{newIdent("x"), newIdent("y")},
+			Lhs: []ast.Expr{ast.NewIdent("x"), ast.NewIdent("y")},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{intLit(1), intLit(2)},
 		}, matched)
@@ -773,7 +773,7 @@ func TestDefine(t *testing.T) {
 	t.Run("function call", func(t *testing.T) {
 		_, matched, err := parse(`(define (text _) (r.ReadString '\n'))`)
 		assert.Equal(t, &ast.AssignStmt{
-			Lhs: []ast.Expr{newIdent("text"), newIdent("_")},
+			Lhs: []ast.Expr{ast.NewIdent("text"), ast.NewIdent("_")},
 			Tok: token.DEFINE,
 			Rhs: []ast.Expr{
 				&ast.CallExpr{
@@ -797,7 +797,7 @@ func TestUnaryExpr(t *testing.T) {
 		_, matched, err := parse(`&x`)
 		assert.Equal(t, &ast.UnaryExpr{
 			Op: token.AND,
-			X:  newIdent("x"),
+			X:  ast.NewIdent("x"),
 		}, matched)
 		assert.NoError(t, err)
 	})
@@ -811,8 +811,8 @@ func TestDeclStmt(t *testing.T) {
 			Tok: token.VAR,
 			Specs: []ast.Spec{
 				&ast.ValueSpec{
-					Names: []*ast.Ident{newIdent("x")},
-					Type:  newIdent("int"),
+					Names: []*ast.Ident{ast.NewIdent("x")},
+					Type:  ast.NewIdent("int"),
 				},
 			},
 		},

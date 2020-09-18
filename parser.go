@@ -97,16 +97,8 @@ var Identifier = ParserFunc(func(input Source) (remaining Source, matched interf
 	return
 })
 
-// Ident matches an &ast.Ident node.
 var Ident = Map(Identifier, func(matched interface{}) interface{} {
-	ident := matched.(string)
-	tok := token.Lookup(ident)
-	if tok == token.IDENT {
-		return &ast.Ident{
-			Name: matched.(string),
-		}
-	}
-	return tok
+	return ast.NewIdent(matched.(string))
 })
 
 var OperandName = Choice(
