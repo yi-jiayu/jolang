@@ -876,3 +876,37 @@ func TestIncDecStmt(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestBlock(t *testing.T) {
+	parse := stringParser(Block)
+	t.Run("single expression", func(t *testing.T) {
+		_, matched, err := parse(`(+ 1 2)`)
+		assert.Equal(t, &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ExprStmt{X: &ast.BinaryExpr{
+					X:  intLit(1),
+					Op: token.ADD,
+					Y:  intLit(2),
+				}},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
+	t.Run("do expression", func(t *testing.T) {
+		_, matched, err := parse(`(do (+ 1 2) (inc i))`)
+		assert.Equal(t, &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ExprStmt{X: &ast.BinaryExpr{
+					X:  intLit(1),
+					Op: token.ADD,
+					Y:  intLit(2),
+				}},
+				&ast.IncDecStmt{
+					X:   ast.NewIdent("i"),
+					Tok: token.INC,
+				},
+			},
+		}, matched)
+		assert.NoError(t, err)
+	})
+}

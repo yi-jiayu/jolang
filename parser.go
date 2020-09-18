@@ -663,7 +663,11 @@ var StatementList *statementList
 
 var Statement = Choice(DeclStmt, IfStmt, SimpleStmt)
 
-var SimpleStmt = Choice(Define, Expr)
+var SimpleStmt = Choice(Define, IncDecStmt, ExprStmt)
+
+var ExprStmt = Map(Expr, func(matched interface{}) interface{} {
+	return &ast.ExprStmt{X: matched.(ast.Expr)}
+})
 
 var IncDecStmt = Map(
 	Parenthesized(Pair(Choice(MapConst(Keyword("inc"), token.INC), MapConst(Keyword("dec"), token.DEC)), WhitespaceWrap(Expr))),
@@ -738,41 +742,37 @@ var QualifiedIdent = Map(
 		}
 	})
 
-var IfStmt = Map(Parenthesized(Right(
-	Literal(token.IF.String()), Pair(Right(ZeroOrMoreWhitespaceChars(),
-		Expr), Pair(
-		WhitespaceWrap(Choice(DoExpr, Expr)),
-		Optional(WhitespaceWrap(Choice(DoExpr, Expr))))))),
+var Block = Map(
+	Choice(DoExpr, Expr),
 	func(matched interface{}) interface{} {
-		pair := matched.(MatchedPair)
-		cond, arms := pair.Left.(ast.Expr), pair.Right.(MatchedPair)
-		var body *ast.BlockStmt
-		switch v := arms.Left.(type) {
-		case *ast.BlockStmt:
-			body = v
+		switch v := matched.(type) {
 		case ast.Expr:
-			body = &ast.BlockStmt{
+			return &ast.BlockStmt{
 				List: []ast.Stmt{
 					&ast.ExprStmt{X: v},
 				},
 			}
+		case *ast.BlockStmt:
+			return v
 		}
+		return nil
+	})
+
+var IfStmt = Map(Parenthesized(Right(
+	Literal(token.IF.String()), Pair(Right(ZeroOrMoreWhitespaceChars(),
+		Expr), Pair(
+		WhitespaceWrap(Block),
+		Optional(WhitespaceWrap(Block)))))),
+	func(matched interface{}) interface{} {
+		pair := matched.(MatchedPair)
+		cond, arms := pair.Left.(ast.Expr), pair.Right.(MatchedPair)
 		var Else ast.Stmt
-		if e := arms.Right; e != nil {
-			switch v := e.(type) {
-			case *ast.BlockStmt:
-				Else = v
-			case ast.Expr:
-				Else = &ast.BlockStmt{
-					List: []ast.Stmt{
-						&ast.ExprStmt{X: v},
-					},
-				}
-			}
+		if e, ok := arms.Right.(*ast.BlockStmt); ok {
+			Else = e
 		}
 		return &ast.IfStmt{
 			Cond: cond,
-			Body: body,
+			Body: arms.Left.(*ast.BlockStmt),
 			Else: Else,
 		}
 	})
