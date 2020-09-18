@@ -696,27 +696,21 @@ func TestDoExpr(t *testing.T) {
 	parse := stringParser(DoExpr)
 	t.Run("empty", func(t *testing.T) {
 		_, matched, err := parse(`(do)`)
-		assert.Equal(t, &ast.BlockStmt{
-			List: []ast.Stmt{},
-		}, matched)
+		assert.Equal(t, []ast.Stmt{}, matched)
 		assert.NoError(t, err)
 	})
 	t.Run("one expr", func(t *testing.T) {
 		_, matched, err := parse(`(do (println true))`)
-		assert.Equal(t, &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("true"))},
-			},
+		assert.Equal(t, []ast.Stmt{
+			&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("true"))},
 		}, matched)
 		assert.NoError(t, err)
 	})
 	t.Run("two expr", func(t *testing.T) {
 		_, matched, err := parse(`(do (println true) (println false))`)
-		assert.Equal(t, &ast.BlockStmt{
-			List: []ast.Stmt{
-				&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("true"))},
-				&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("false"))},
-			},
+		assert.Equal(t, []ast.Stmt{
+			&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("true"))},
+			&ast.ExprStmt{X: newCallExpr("println", ast.NewIdent("false"))},
 		}, matched)
 		assert.NoError(t, err)
 	})
@@ -1008,6 +1002,47 @@ func TestForStmt(t *testing.T) {
 				Fun:  ast.NewIdent("println"),
 				Args: []ast.Expr{ast.NewIdent("i")},
 			}}}},
+		}, matched)
+	})
+}
+
+func TestAssignment(t *testing.T) {
+	parse := stringParser(Assignment)
+	t.Run("single variable", func(t *testing.T) {
+		_, matched, err := parse(`(assign x 1)`)
+		assert.NoError(t, err)
+		assert.Equal(t, &ast.AssignStmt{
+			Lhs: []ast.Expr{
+				&ast.Ident{
+					Name: "x",
+				},
+			},
+			Tok: token.ASSIGN,
+			Rhs: []ast.Expr{
+				&ast.BasicLit{
+					Kind:  token.INT,
+					Value: "1",
+				},
+			},
+		}, matched)
+	})
+	t.Run("single expression", func(t *testing.T) {
+		_, matched, err := parse(`(assign x ((+ x 1)))`)
+		assert.NoError(t, err)
+		assert.Equal(t, &ast.AssignStmt{
+			Lhs: []ast.Expr{
+				&ast.Ident{
+					Name: "x",
+				},
+			},
+			Tok: token.ASSIGN,
+			Rhs: []ast.Expr{
+				&ast.BinaryExpr{
+					X:  ast.NewIdent("x"),
+					Op: token.ADD,
+					Y:  intLit(1),
+				},
+			},
 		}, matched)
 	})
 }

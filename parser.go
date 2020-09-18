@@ -663,7 +663,7 @@ var StatementList *statementList
 
 var Statement = Choice(ForStmt, DeclStmt, IfStmt, SimpleStmt)
 
-var SimpleStmt = Choice(Define, IncDecStmt, ExprStmt)
+var SimpleStmt = Choice(Define, Assignment, IncDecStmt, ExprStmt)
 
 var ExprStmt = Map(Expr, func(matched interface{}) interface{} {
 	return &ast.ExprStmt{X: matched.(ast.Expr)}
@@ -679,13 +679,12 @@ var IncDecStmt = Map(
 		}
 	})
 
+// DoExpr matches an S-expression starting with a "do" keyword and a StatementList, returning a slice of ast.Stmt.
 var DoExpr = Map(Parenthesized(Right(
 	Literal("do"),
 	StatementList)),
 	func(matched interface{}) interface{} {
-		return &ast.BlockStmt{
-			List: matched.([]ast.Stmt),
-		}
+		return matched.([]ast.Stmt)
 	},
 )
 
@@ -742,21 +741,28 @@ var QualifiedIdent = Map(
 		}
 	})
 
-var Block = Map(
-	Choice(DoExpr, Expr),
-	func(matched interface{}) interface{} {
-		switch v := matched.(type) {
-		case ast.Expr:
-			return &ast.BlockStmt{
-				List: []ast.Stmt{
-					&ast.ExprStmt{X: v},
-				},
+type block struct{}
+
+func (*block) Parse(input Source) (remaining Source, matched interface{}, err error) {
+	return Map(
+		Choice(DoExpr, Statement),
+		func(matched interface{}) interface{} {
+			switch v := matched.(type) {
+			case []ast.Stmt:
+				return &ast.BlockStmt{
+					List: v,
+				}
+			case ast.Stmt:
+				return &ast.BlockStmt{
+					List: []ast.Stmt{v},
+				}
 			}
-		case *ast.BlockStmt:
-			return v
-		}
-		return nil
-	})
+			return nil
+		})(input)
+}
+
+// Block matches either a do expression or a single statement and returns a slice of ast.Stmt.
+var Block *block
 
 var IfStmt = Map(Parenthesized(Right(
 	Literal(token.IF.String()), Pair(Right(ZeroOrMoreWhitespaceChars(),
@@ -858,6 +864,20 @@ var ForStmt = Map(
 			Cond: seq[1].(ast.Expr),
 			Post: seq[2].(ast.Stmt),
 			Body: seq[3].(*ast.BlockStmt),
+		}
+	})
+
+var Assignment = Map(
+	Parenthesized(Right(
+		Keyword("assign"), Pair(WhitespaceWrap(
+			IdentifierList), WhitespaceWrap(
+			ExpressionList)))),
+	func(matched interface{}) interface{} {
+		pair := matched.(MatchedPair)
+		return &ast.AssignStmt{
+			Lhs: pair.Left.([]ast.Expr),
+			Tok: token.ASSIGN,
+			Rhs: pair.Right.([]ast.Expr),
 		}
 	})
 

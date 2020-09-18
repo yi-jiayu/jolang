@@ -1,0 +1,9 @@
+(package main)
+
+(import "fmt")
+
+(func main ()
+    (define sum 0)
+    (for (define i 0) (< i 10) (inc i)
+        (assign sum ((+ sum 1))))
+    (fmt.Println sum))
