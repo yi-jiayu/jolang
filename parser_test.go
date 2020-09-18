@@ -910,3 +910,31 @@ func TestBlock(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestForStmt(t *testing.T) {
+	parse := stringParser(ForStmt)
+	t.Run("init, cond and post", func(t *testing.T) {
+		_, matched, err := parse(`(for (define i 0) (< i 10) (inc i) (println i))`)
+		assert.NoError(t, err)
+		assert.Equal(t, &ast.ForStmt{
+			Init: &ast.AssignStmt{
+				Lhs: []ast.Expr{ast.NewIdent("i")},
+				Tok: token.DEFINE,
+				Rhs: []ast.Expr{intLit(0)},
+			},
+			Cond: &ast.BinaryExpr{
+				X:  ast.NewIdent("i"),
+				Op: token.LSS,
+				Y:  intLit(10),
+			},
+			Post: &ast.IncDecStmt{
+				X:   ast.NewIdent("i"),
+				Tok: token.INC,
+			},
+			Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
+				Fun:  ast.NewIdent("println"),
+				Args: []ast.Expr{ast.NewIdent("i")},
+			}}}},
+		}, matched)
+	})
+}

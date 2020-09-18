@@ -661,7 +661,7 @@ func (*statementList) Parse(input Source) (remaining Source, matched interface{}
 
 var StatementList *statementList
 
-var Statement = Choice(DeclStmt, IfStmt, SimpleStmt)
+var Statement = Choice(ForStmt, DeclStmt, IfStmt, SimpleStmt)
 
 var SimpleStmt = Choice(Define, IncDecStmt, ExprStmt)
 
@@ -843,6 +843,22 @@ var DeclStmt = Map(
 					},
 				},
 			},
+		}
+	})
+
+var ForStmt = Map(
+	Parenthesized(Right(Keyword("for"), Sequence(
+		WhitespaceWrap(SimpleStmt),
+		WhitespaceWrap(Expr),
+		WhitespaceWrap(SimpleStmt),
+		WhitespaceWrap(Block)))),
+	func(matched interface{}) interface{} {
+		seq := matched.([]interface{})
+		return &ast.ForStmt{
+			Init: seq[0].(ast.Stmt),
+			Cond: seq[1].(ast.Expr),
+			Post: seq[2].(ast.Stmt),
+			Body: seq[3].(*ast.BlockStmt),
 		}
 	})
 
