@@ -1,0 +1,9 @@
+(package main)
+
+(import "fmt" "strconv")
+
+(func main ()
+    (define s "hello")
+    (define (_ err) ((strconv.Atoi s)))
+    (if (!= err nil)
+        (fmt.Printf "error: not a number: %s\n" s)))

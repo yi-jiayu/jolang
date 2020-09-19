@@ -485,6 +485,7 @@ var BinaryOp = Choice(
 	MapConst(Rune('='), token.EQL),
 	MapConst(Rune('<'), token.LSS),
 	MapConst(Rune('>'), token.GTR),
+	MapConst(Literal("!="), token.NEQ),
 )
 
 type binaryExpr struct{}
