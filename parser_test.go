@@ -1047,3 +1047,110 @@ func TestAssignment(t *testing.T) {
 		}, matched)
 	})
 }
+
+func TestExprSwitchStmt(t *testing.T) {
+	parse := stringParser(ExprSwitchStmt)
+	t.Run("no cases", func(t *testing.T) {
+		_, matched, err := parse(`(switch)`)
+		if assert.NoError(t, err) {
+			assert.Equal(t, &ast.SwitchStmt{
+				Body: &ast.BlockStmt{},
+			}, matched)
+		}
+	})
+	t.Run("default case", func(t *testing.T) {
+		_, matched, err := parse(`(switch (default (println "default")))`)
+		if assert.NoError(t, err) {
+			assert.Equal(t, &ast.SwitchStmt{
+				Body: &ast.BlockStmt{
+					List: []ast.Stmt{
+						&ast.CaseClause{
+							Body: []ast.Stmt{
+								&ast.ExprStmt{
+									X: &ast.CallExpr{
+										Fun:  ast.NewIdent("println"),
+										Args: []ast.Expr{strLit(`"default"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			}, matched)
+		}
+	})
+	t.Run("single literal and identifier", func(t *testing.T) {
+		_, matched, err := parse(`(switch (case 1 (println 1)) (case x (println x)))`)
+		if assert.NoError(t, err) {
+			assert.Equal(t, &ast.SwitchStmt{
+				Body: &ast.BlockStmt{
+					List: []ast.Stmt{
+						&ast.CaseClause{
+							List: []ast.Expr{intLit(1)},
+							Body: []ast.Stmt{
+								&ast.ExprStmt{
+									X: &ast.CallExpr{
+										Fun:  ast.NewIdent("println"),
+										Args: []ast.Expr{intLit(1)},
+									},
+								},
+							},
+						},
+						&ast.CaseClause{
+							List: []ast.Expr{ast.NewIdent("x")},
+							Body: []ast.Stmt{
+								&ast.ExprStmt{
+									X: &ast.CallExpr{
+										Fun:  ast.NewIdent("println"),
+										Args: []ast.Expr{ast.NewIdent("x")},
+									},
+								},
+							},
+						},
+					},
+				},
+			}, matched)
+		}
+	})
+	t.Run("complex expressions", func(t *testing.T) {
+		_, matched, err := parse(`(switch (case ((f)) (println 1)) (case ((= 0 (% x 2))) (println x)))`)
+		if assert.NoError(t, err) {
+			assert.Equal(t, &ast.SwitchStmt{
+				Body: &ast.BlockStmt{
+					List: []ast.Stmt{
+						&ast.CaseClause{
+							List: []ast.Expr{&ast.CallExpr{Fun: ast.NewIdent("f")}},
+							Body: []ast.Stmt{
+								&ast.ExprStmt{
+									X: &ast.CallExpr{
+										Fun:  ast.NewIdent("println"),
+										Args: []ast.Expr{intLit(1)},
+									},
+								},
+							},
+						},
+						&ast.CaseClause{
+							List: []ast.Expr{&ast.BinaryExpr{
+								X:  intLit(0),
+								Op: token.EQL,
+								Y: &ast.BinaryExpr{
+									X:  ast.NewIdent("x"),
+									Op: token.REM,
+									Y:  intLit(2),
+								},
+							}},
+							Body: []ast.Stmt{
+								&ast.ExprStmt{
+									X: &ast.CallExpr{
+										Fun:  ast.NewIdent("println"),
+										Args: []ast.Expr{ast.NewIdent("x")},
+									},
+								},
+							},
+						},
+					},
+				},
+			}, matched)
+		}
+	})
+}

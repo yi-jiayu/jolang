@@ -678,7 +678,7 @@ func (*statementList) Parse(input Source) (output Source, matched interface{}, e
 
 var StatementList *statementList
 
-var Statement = Choice(ForStmt, DeclStmt, IfStmt, SimpleStmt)
+var Statement = Choice(ExprSwitchStmt, ForStmt, DeclStmt, IfStmt, SimpleStmt)
 
 var SimpleStmt = Choice(Define, Assignment, IncDecStmt, ExprStmt)
 
@@ -895,6 +895,31 @@ var Assignment = Map(
 			Lhs: pair.Left.([]ast.Expr),
 			Tok: token.ASSIGN,
 			Rhs: pair.Right.([]ast.Expr),
+		}
+	})
+
+var ExprSwitchStmt = Map(
+	Parenthesized(Right(Keyword("switch"), ZeroOrMore(WhitespaceWrap(
+		Choice(
+			Parenthesized(Right(Keyword("case"), Pair(WhitespaceWrap(ExpressionList), WhitespaceWrap(Block)))),
+			Parenthesized(Right(Keyword("default"), WhitespaceWrap(Block)))))))),
+	func(matched interface{}) interface{} {
+		var clauses []ast.Stmt
+		for _, match := range matched.([]interface{}) {
+			switch v := match.(type) {
+			case *ast.BlockStmt:
+				clauses = append(clauses, &ast.CaseClause{
+					Body: v.List,
+				})
+			case MatchedPair:
+				clauses = append(clauses, &ast.CaseClause{
+					List: v.Left.([]ast.Expr),
+					Body: v.Right.(*ast.BlockStmt).List,
+				})
+			}
+		}
+		return &ast.SwitchStmt{
+			Body: &ast.BlockStmt{List: clauses},
 		}
 	})
 
