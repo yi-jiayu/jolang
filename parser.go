@@ -485,6 +485,7 @@ var BinaryOp = Choice(
 	MapConst(Rune('='), token.EQL),
 	MapConst(Rune('<'), token.LSS),
 	MapConst(Rune('>'), token.GTR),
+	MapConst(Rune('%'), token.REM),
 	MapConst(Literal("!="), token.NEQ),
 )
 
@@ -777,11 +778,11 @@ func (*block) Parse(input Source) (output Source, matched interface{}, err error
 		})(input)
 }
 
-// Block matches either a do expression or a single statement and returns a slice of ast.Stmt.
+// Block matches either a do expression or a single statement and returns a pointer to an ast.BlockStmt.
 var Block *block
 
 var IfStmt = Map(Parenthesized(Right(
-	Literal(token.IF.String()), Pair(Right(ZeroOrMoreWhitespaceChars(),
+	Keyword(token.IF.String()), Pair(Right(ZeroOrMoreWhitespaceChars(),
 		Expr), Pair(
 		WhitespaceWrap(Block),
 		Optional(WhitespaceWrap(Block)))))),

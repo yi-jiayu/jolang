@@ -1,0 +1,13 @@
+(package main)
+
+(import "fmt")
+
+(func main ()
+    (for (define i 0) (< i 100) (inc i)
+        (if (= 0 (% i 15))
+            (fmt.Println "fizzbuzz")
+            (if (= 0 (% i 3))
+                (fmt.Println "fizz")
+                (if (= 0 (% i 5))
+                    (fmt.Println "buzz")
+                    (fmt.Println i))))))
